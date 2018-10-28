@@ -1,0 +1,240 @@
+---
+title: "Thaum Pangenome Analysis: By Component"
+output: html_notebook
+---
+## Preliminary
+Load necessary packages
+```{r}
+library(crabrawlR)
+library(stringr)
+library(ggplot2)
+library(reshape2)
+
+
+```
+
+
+Load pangenome matrix and "clean" it (remove NAs), load taxa key
+```{r}
+# headers are incorrectly imported by read.csv, so set header=FALSE
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+pangenome = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome = panpretty(pangenome)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean = NAcheck(pangenome)
+
+# read in taxa key
+taxkey = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# read in COG annotation table
+thaumtab = read.table("annotation/ThaumPangenome.tab", sep="\t", quote = "", stringsAsFactors=FALSE)
+rownames(thaumtab) = thaumtab[,1]
+
+categories = c("D", "M", "N", "O", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "J", "K", "L", "C", "E", "F", "G", "H", "I", "P", "Q", "R", "S")
+
+```
+
+## Total counts of each pangenome component
+Separate taxa by phylum status (Thaum vs. Aig).
+```{r}
+thaum = taxkey[which(taxkey$Type_Phylum == "thaum"),1]
+aig = taxkey[which(taxkey$Type_Phylum == "aig"),1]
+
+taxlistThaum = taxrownums(df=pangenome_clean, taxa_yes=thaum)
+taxlistAig = taxrownums(df=pangenome_clean, taxa_yes=aig)
+
+```
+
+Calculate Shared and Unique Core/Soft-Core/Cloud/Shell of Thaum Pangenome
+```{r}
+sharedpan = sharedgroups(pangenome_clean, taxlistThaum$r_yes)
+uniquepan = getunique(pangenome_clean, taxlistThaum$r_yes, taxlistAig$r_yes)
+```
+
+## Functional category enrichment
+
+Phylum-wide COG category counts
+```{r}
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+# Create dataframe of counts
+pancounts = data.frame(matrix(ncol=0,nrow=0), stringsAsFactors=FALSE)
+for(i in 1:length(categories)) {
+  result = c(as.character(categories[i]), sum(str_detect(thaumtab$V3, categories[i]), na.rm=TRUE))
+  pancounts = rbind(pancounts, result, stringsAsFactors=FALSE)
+}
+
+pancounts = rbind(pancounts, c("NA", sum(is.na(thaumtab$V3))))
+rownames(pancounts) = pancounts[,1]
+colnames(pancounts) = c("cog_category", "pan_total")
+pancounts$pan_total = as.numeric(as.character(pancounts$pan_total))
+pancounts$cog_category = factor(pancounts$cog_category, levels=pancounts$cog_category)
+
+# Create barplot of categories (x-axis) vs. number of OFs in that category (y-axis)
+ggplot(pancounts, aes(x=cog_category, y=pan_total)) + geom_bar(position="dodge", stat="identity", fill="turquoise3") + labs(y="# of ortholog families", x="COG category") + geom_text(aes(label=pan_total), size=3, vjust=-1)
+
+ggsave('rplots/cogcatvsnumber_withCsymA.pdf', plot = last_plot(), device = NULL, path = NULL,
+  scale = 1, units = "in", width= 20, height= 10, dpi = 300, limitsize = TRUE)
+
+# Remove Poorly Characterized & plot
+pancounts_noPC = pancounts[which(rownames(pancounts) != "R" & rownames(pancounts) != "S" & rownames(pancounts) != "NA"),]
+
+ggplot(pancounts_noPC, aes(x=cog_category, y=pan_total)) + geom_bar(position="dodge", stat="identity", fill="turquoise3") + labs(y="# of ortholog families", x="COG category") + geom_text(aes(label=pan_total), size=3, vjust=-1)
+
+ggsave('rplots/cogcatvsnumber_withCsymA-noPC.pdf', plot = last_plot(), device = NULL, path = NULL,
+  scale = 1, units = "in", width= 20, height= 10, dpi = 300, limitsize = TRUE)
+
+
+```
+
+Core vs. Accessory (Strict and Soft)
+```{r}
+# Strict Core and Strict Accessory
+## Retrieve ortholog family names for subsetting
+nStrictCore = gsub(".faa", "", names(sharedpan$yes_strict))
+nStrictAcc = gsub(".faa", "", names(sharedpan$yes_atleastone))
+nStrictAcc = nStrictAcc[!nStrictAcc %in% nStrictCore]
+
+strictCoreCounts = getcounts(nStrictCore, categories, thaumtab)
+strictAccCounts = getcounts(nStrictAcc, categories, thaumtab)
+
+## Set up contingency tables for FET (as dataframe)
+strictCoreDF = data.frame(core_in_cat= strictCoreCounts,
+                 core_not_cat= length(nStrictCore) - strictCoreCounts,
+                 acc_in_cat= strictAccCounts,
+                 acc_not_cat= length(nStrictAcc) - strictAccCounts)
+
+strictAccDF = data.frame(acc_in_cat= strictAccCounts,
+                 acc_not_cat= length(nStrictAcc) - strictAccCounts,
+                 core_in_cat= strictCoreCounts,
+                 core_not_cat= length(nStrictCore) - strictCoreCounts)
+
+## Fisher Exact Test and Bonferroni correction
+strictCoreP = apply(strictCoreDF,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+strictAccP = apply(strictAccDF,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+strictP= cbind(strictCoreP, strictAccP)
+strictP_corrected = sapply(strictP, p.adjust, method="bonferroni")
+strictP_corrected = as.data.frame(matrix(strictP_corrected, nc=2), stringsAsFactors=FALSE) 
+rownames(strictP_corrected) = c(categories, "NA")
+colnames(strictP_corrected) = c("strictCoreP", "strictAccP")
+
+# Soft Core and Soft Accessory
+## Retrieve ortholog family names for subsetting
+nSoftCore = gsub(".faa", "", names(sharedpan$yes_soft))
+nSoftAcc = gsub(".faa", "", names(sharedpan$yes_atleastone))
+nSoftAcc = nSoftAcc[!nSoftAcc %in% nSoftCore]
+
+softCoreCounts = getcounts(nSoftCore, categories, thaumtab)
+softAccCounts = getcounts(nSoftAcc, categories, thaumtab)
+
+## Set up contingency tables for FET (as dataframe)
+softCoreDF = data.frame(core_in_cat= softCoreCounts,
+                 core_not_cat= length(nSoftCore) - softCoreCounts,
+                 acc_in_cat= softAccCounts,
+                 acc_not_cat= length(nSoftAcc) - softAccCounts)
+
+softAccDF = data.frame(acc_in_cat= softAccCounts,
+                 acc_not_cat= length(nSoftAcc) - softAccCounts,
+                 core_in_cat= softCoreCounts,
+                 core_not_cat= length(nSoftCore) - softCoreCounts)
+
+## FET and Bonferroni correction
+softCoreP = apply(softCoreDF,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+softAccP = apply(softAccDF,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+softP= cbind(softCoreP, softAccP)
+rownames(softP) = c(categories, "NA")
+softP_corrected = sapply(softP, p.adjust, method="bonferroni")
+softP_corrected = as.data.frame(matrix(softP_corrected, nc=2), stringsAsFactors = FALSE)
+rownames(softP_corrected) = c(categories, "NA")
+colnames(softP_corrected) = c("softCoreP", "softAccP")
+```
+
+
+# Now combine strict and soft
+## rearrange so it's easier to read!! -- strictCore and softCore next to each other, same with accessory
+```{r}
+pangenomepartsP = cbind(strictP_corrected, softP_corrected)
+pangenomepartsP = cbind(pangenomepartsP[,1], pangenomepartsP[,3], pangenomepartsP[,2], pangenomepartsP[,4]) 
+colnames(pangenomepartsP) =c("strict_core", "soft_core", "strict_acc", "soft_acc")
+rownames(pangenomepartsP) = c(categories, "NA")
+
+# Pick out significant categories (p <.05)
+pangenomepartsP_sig = which(pangenomepartsP < .05, arr.ind=T)
+pangenomepartsP_sig_names = as.data.frame(cbind(rownames(pangenomepartsP_sig), colnames(pangenomepartsP[,pangenomepartsP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(pangenomepartsP_sig_names) = c("category", "pan_part")
+
+
+pangenomepartsP_sig_sorted = aggregate(pan_part ~ category, pangenomepartsP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+
+```
+
+Plot stacked barplot (core + accessory stacked for each COG category)
+```{r}
+## Arrange strict
+strict_wide = data.frame(corefreq=strictCoreCounts / (strictCoreCounts + strictAccCounts),
+                         accfreq=strictAccCounts / (strictCoreCounts + strictAccCounts))
+
+rownames(strict_wide) = c(categories, "NA")
+strict_wide = na.omit(strict_wide)
+
+strict_wide = cbind(rownames(strict_wide), strict_wide)
+colnames(strict_wide) = c("category", "core_freq", "acc_freq")
+
+strict_long = melt(strict_wide, id= c("category"))
+colnames(strict_long) = c("category", "component", "freq")
+
+strict_long$category = factor(strict_long$category, levels=strict_long$category)
+# strict_wide = cbind(strict_wide, rep_len("C",length(strict_wide$strictCore))) -- only in oldstyle plotting
+
+ggplot(strict_long, aes(fill=component, y=freq, x=category)) + geom_bar(stat= "identity") + labs(y="% in category", x="category")
+ggsave('rplots/coreaccessorystack_CsymA_strict.pdf', plot = last_plot(), device = NULL, path = NULL,
+  scale = 1, units = "in", width= 20 , height= 10, dpi = 300, limitsize = TRUE)
+
+
+## Arrange soft
+soft_wide = data.frame(corefreq=softCoreCounts / (softCoreCounts + softAccCounts),
+                         accfreq=softAccCounts / (softCoreCounts + softAccCounts))
+
+rownames(soft_wide) = c(categories, "NA")
+soft_wide = na.omit(soft_wide)
+
+soft_wide = cbind(rownames(soft_wide), soft_wide)
+colnames(soft_wide) = c("category", "core_freq", "acc_freq")
+
+soft_long = melt(soft_wide, id= c("category"))
+colnames(soft_long) = c("category", "component", "freq")
+
+soft_long$category = factor(soft_long$category, levels=soft_long$category)
+# soft_wide = cbind(soft_wide, rep_len("C",length(soft_wide$softCore))) -- only in oldstyle plotting
+
+ggplot(soft_long, aes(fill=component, y=freq, x=category)) + geom_bar(stat= "identity") + labs(y="% in category", x="category")
+ggsave('rplots/coreaccessorystack_CsymA_soft.pdf', plot = last_plot(), device = NULL, path = NULL,
+  scale = 1, units = "in", width= 20 , height= 10, dpi = 300, limitsize = TRUE)
+
+```
+
+
+
+
+## Stacked barplot -- old way of plotting with combined strict and soft w/ facets
+```{r}
+
+
+## Combine strict and soft and transform to long -- old way
+CA_wide = rbind(strict_wide, soft_wide)
+CA_long = melt(CA_wide, id= c("category"))
+colnames(CA_long) = c("category", "component", "counts")
+
+ggplot(CA_long, aes(fill=component, y=counts, x=type)) + geom_bar(stat="identity", position="fill", width=0.9) + facet_grid( ~ category) + theme(panel.spacing = unit(0, "lines")) + labs(y="% in category", x="core definition type")
+
+ggsave('coreaccessorystack.pdf', plot = last_plot(), device = NULL, path = NULL,
+  scale = 1, units = "in", width= 20 , height= 10, dpi = 300, limitsize = TRUE)
+
+
+```
+
+
