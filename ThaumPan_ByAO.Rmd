@@ -1,0 +1,292 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+## Preliminary
+Load necessary packages
+```{r}
+library(crabrawlR)
+library(stringr)
+library(venn)
+
+```
+
+Load pangenome matrix and "clean" it (remove NAs), load taxa key
+```{r}
+# headers are incorrectly imported by read.csv, so set header=FALSE
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+pangenome = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome = panpretty(pangenome)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean = NAcheck(pangenome)
+
+# read in taxa key
+taxkey = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# read in COG annotation table
+thaumtab = read.table("annotation/ThaumPangenome.tab", sep="\t", quote = "", stringsAsFactors=FALSE)
+rownames(thaumtab) = thaumtab[,1]
+
+categories = c("D", "M", "N", "O", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "J", "K", "L", "C", "E", "F", "G", "H", "I", "P", "Q", "R", "S")
+
+```
+
+Separate taxa by AO
+```{r}
+AO = taxkey[which(taxkey$Type_AO == "AO"),1]
+Csub = taxkey[which(taxkey$Type_Phylum == "aig"),1]
+ThFn1 = taxkey[which(taxkey$Type_Taxa == "groupI1c"), 1]
+
+# Get corresponding row number in pangenome_clean for that taxon
+taxlistAO = taxrownums(df=pangenome_clean, taxa_yes=AO)
+taxlistCsub = taxrownums(df=pangenome_clean, taxa_yes=Csub)
+taxlistThFn1 = taxrownums(df=pangenome_clean, taxa_yes=ThFn1)
+
+```
+
+Calculate shared and unique ortholog groups by order
+```{r}
+sharedAO = sharedgroups(pangenome_clean, taxlistAO$r_yes)
+uniqueAO = getunique(pangenome_clean, taxlistAO$r_yes, taxlistAO$r_no)
+
+sharedCsub = sharedgroups(pangenome_clean, taxlistCsub$r_yes)
+uniqueCsub = getunique(pangenome_clean, taxlistCsub$r_yes, taxlistCsub$r_no)
+
+sharedThFn1 = sharedgroups(pangenome_clean, taxlistThFn1$r_yes)
+uniqueThFn1 = getunique(pangenome_clean, taxlistThFn1$r_yes, taxlistThFn1$r_no)
+
+```
+
+
+Summary dataframe of counts (for supplementary tables, etc ...)
+```{r}
+byAO = data.frame(Csub=c(sharedCsub$yes_strict_ct, sharedCsub$yes_soft_ct,sharedCsub$yes_atleastone_ct, uniqueCsub$yes_strict_ct, uniqueCsub$yes_soft_ct, uniqueCsub$yes_atleastone_ct),
+                     ThFn1=c(sharedThFn1$yes_strict_ct, sharedThFn1$yes_soft_ct,sharedThFn1$yes_atleastone_ct, uniqueThFn1$yes_strict_ct, uniqueThFn1$yes_soft_ct, uniqueThFn1$yes_atleastone_ct),
+                     AO=c(sharedAO$yes_strict_ct, sharedAO$yes_soft_ct,sharedAO$yes_atleastone_ct, uniqueAO$yes_strict_ct, uniqueAO$yes_soft_ct, uniqueAO$yes_atleastone_ct))
+
+rownames(byAO) = c("shared_strict", "shared_soft", "shared_at-least-one", "unique_strict", "unique_soft", "unique_at-least-one")
+
+```
+
+
+## Venn Diagrams
+Each ellipse represents a subclade grouping
+```{r}
+
+# Strict
+AO_strict = list(names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedAO$yes_strict))
+
+pdf('rplots/AO-strict_withCsymA.pdf')
+venn(AO_strict, snames = "Csub, ThFn1, AO", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+# Soft
+AO_soft = list(names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedAO$yes_soft))
+
+pdf('rplots/AO-soft_withCsymA.pdf')
+venn(AO_soft, snames = "Csub, ThFn1, AO", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+# At Least One
+AO_one = list(names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedAO$yes_atleastone))
+
+pdf('rplots/AO-atleastone_withCsymA.pdf')
+venn(AO_one, snames = "Csub, ThFn1, AO", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+
+```
+
+
+## Functional Annotation and Enrichment
+### by AO: STRICT
+```{r}
+# Subclade strict core - number of genes
+nCsub_core_C = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_core_C = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nAO_core_C = gsub(".faa", "", names(sharedAO$yes_strict)) 
+
+# Combine all
+coreC_all = Reduce(union, list(nCsub_core_C, nThFn1_core_C, nAO_core_C)) 
+cCoreC_all = getcounts(coreC_all, categories, thaumtab)
+names(cCoreC_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_core_C = getcounts(nCsub_core_C, categories, thaumtab) 
+cThFn1_core_C = getcounts(nThFn1_core_C, categories, thaumtab) 
+cAO_core_C = getcounts(nAO_core_C, categories, thaumtab) 
+
+```
+
+### by AO: SOFT
+```{r}
+# Subclade strict core - number of genes
+nCsub_core_F = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_core_F = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nAO_core_F = gsub(".faa", "", names(sharedAO$yes_soft)) 
+
+# Combine all
+coreF_all = Reduce(union, list(nCsub_core_F, nThFn1_core_F, nAO_core_F)) 
+cCoreF_all = getcounts(coreF_all, categories, thaumtab)
+names(cCoreF_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_core_F = getcounts(nCsub_core_F, categories, thaumtab) 
+cThFn1_core_F = getcounts(nThFn1_core_F, categories, thaumtab) 
+cAO_core_F = getcounts(nAO_core_F, categories, thaumtab) 
+
+```
+
+### by AO: at least one
+```{r}
+# Subclade strict core - number of genes
+nCsub_one = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_one = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nAO_one = gsub(".faa", "", names(sharedAO$yes_atleastone)) 
+
+# Combine all
+coreOne_all = Reduce(union, list(nCsub_one, nThFn1_one, nAO_one)) 
+cCoreOne_all = getcounts(coreOne_all, categories, thaumtab)
+names(cCoreOne_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_one = getcounts(nCsub_one, categories, thaumtab) 
+cThFn1_one = getcounts(nThFn1_one, categories, thaumtab) 
+cAO_one = getcounts(nAO_one, categories, thaumtab) 
+
+```
+
+Lineage Specific
+Strict
+```{r}
+# AO
+antiAO_C = union(nThFn1_core_C, nCsub_core_C)
+nAO_lin_C = nAO_core_C[!nAO_core_C %in% antiAO_C]
+cAO_lin_C = getcounts(nAO_lin_C, categories, thaumtab)
+
+# nonAO
+antiAO_int_C = union(nThFn1_core_C, nCsub_core_C)
+nAntiAO_lin_C = antiAO_int_C[!antiAO_int_C %in% nAO_core_C]
+cAntiAO_lin_C = getcounts(nAntiAO_lin_C, categories, thaumtab)
+
+```
+
+Soft
+```{r}
+# AO
+antiAO_F = union(nThFn1_core_F, nCsub_core_F)
+nAO_lin_F = nAO_core_F[!nAO_core_F %in% antiAO_C]
+cAO_lin_F = getcounts(nAO_lin_F, categories, thaumtab)
+
+# nonAO
+antiAO_int_F = union(nThFn1_core_F, nCsub_core_F)
+nAntiAO_lin_F = antiAO_int_F[!antiAO_int_F %in% nAO_core_F]
+cAntiAO_lin_F = getcounts(nAntiAO_lin_F, categories, thaumtab)
+
+```
+
+At Least One
+```{r}
+# AO
+antiAO_one = union(nThFn1_one, nCsub_one)
+nAO_lin_one = nAO_one[!nAO_one %in% antiAO_one]
+cAO_lin_one = getcounts(nAO_lin_one, categories, thaumtab)
+
+# nonAO
+antiAO_int_one = union(nThFn1_one, nCsub_one)
+nAntiAO_lin_one = antiAO_int_one[!antiAO_int_one %in% nAO_one]
+cAntiAO_lin_one = getcounts(nAntiAO_lin_one, categories, thaumtab)
+
+```
+
+CONTINGENCY TABLES
+AO
+```{r}
+AODF_lin_C = data.frame(
+  lin_in_cat = cAO_lin_C, # lineage specific 
+  lin_not_cat = sum(cAO_lin_C)-cAO_lin_C, 
+  nlin_in_cat = cCoreC_all - cAO_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cAO_lin_C)) - (cCoreC_all - cAO_lin_C), stringsAsFactors=FALSE)
+
+AOP_lin_C = apply(AODF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+
+AODF_lin_F = data.frame(
+  lin_in_cat = cAO_lin_F, # lineage specific 
+  lin_not_cat = sum(cAO_lin_F)-cAO_lin_F, 
+  nlin_in_cat = cCoreF_all - cAO_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cAO_lin_F)) - (cCoreF_all - cAO_lin_F), stringsAsFactors=FALSE)
+
+AOP_lin_F = apply(AODF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+
+AODF_one = data.frame(
+  lin_in_cat = cAO_lin_one, # lineage specific 
+  lin_not_cat = sum(cAO_lin_one)-cAO_lin_one, 
+  nlin_in_cat = cCoreOne_all - cAO_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cAO_lin_one)) - (cCoreOne_all - cAO_lin_one), stringsAsFactors=FALSE)
+
+AOP_one = apply(AODF_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+nonAO
+```{r}
+nonAODF_lin_C = data.frame(
+  lin_in_cat = cAntiAO_lin_C, # lineage specific 
+  lin_not_cat = sum(cAntiAO_lin_C)-cAntiAO_lin_C, 
+  nlin_in_cat = cCoreC_all - cAntiAO_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cAntiAO_lin_C)) - (cCoreC_all - cAntiAO_lin_C), stringsAsFactors=FALSE)
+
+nonAOP_lin_C = apply(nonAODF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+
+nonAODF_lin_F = data.frame(
+  lin_in_cat = cAntiAO_lin_F, # lineage specific 
+  lin_not_cat = sum(cAntiAO_lin_F)-cAntiAO_lin_F, 
+  nlin_in_cat = cCoreF_all - cAntiAO_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cAntiAO_lin_F)) - (cCoreF_all - cAntiAO_lin_F), stringsAsFactors=FALSE)
+
+nonAOP_lin_F = apply(nonAODF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+
+nonAODF_one = data.frame(
+  lin_in_cat = cAntiAO_lin_one, # lineage specific 
+  lin_not_cat = sum(cAntiAO_lin_one)-cAntiAO_lin_one, 
+  nlin_in_cat = cCoreOne_all - cAntiAO_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cAntiAO_lin_one)) - (cCoreOne_all - cAntiAO_lin_one), stringsAsFactors=FALSE)
+
+nonAOP_one = apply(nonAODF_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+
+Combine, correct, pick sig
+```{r}
+# AO
+AOP_all = as.data.frame(cbind(AOP_lin_C, AOP_lin_F, AOP_one), stringsAsFactors = FALSE)
+AOP_all_corrected = sapply(AOP_all, p.adjust, method="bonferroni")
+rownames(AOP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+AOP_sig = which(AOP_all_corrected < .05, arr.ind=T)
+AOP_sig_names = as.data.frame(cbind(rownames(AOP_sig), colnames(AOP_all_corrected[,AOP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(AOP_sig_names) = c("category", "ellipse_type")
+
+AOP_sig_sorted = aggregate(ellipse_type ~ category, AOP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+# nonAO 
+nonAOP_all = as.data.frame(cbind(nonAOP_lin_C, nonAOP_lin_F, nonAOP_one), stringsAsFactors = FALSE)
+nonAOP_all_corrected = sapply(nonAOP_all, p.adjust, method="bonferroni")
+rownames(nonAOP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+nonAOP_sig = which(nonAOP_all_corrected < .05, arr.ind=T)
+nonAOP_sig_names = as.data.frame(cbind(rownames(nonAOP_sig), colnames(nonAOP_all_corrected[,nonAOP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(nonAOP_sig_names) = c("category", "ellipse_type")
+
+nonAOP_sig_sorted = aggregate(ellipse_type ~ category, nonAOP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+
+```

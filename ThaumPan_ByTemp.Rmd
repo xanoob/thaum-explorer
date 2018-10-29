@@ -1,0 +1,417 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Preliminary
+Load necessary packages
+```{r}
+library(crabrawlR)
+library(stringr)
+library(venn)
+
+```
+
+Load pangenome matrix and "clean" it (remove NAs), load taxa key
+```{r}
+# headers are incorrectly imported by read.csv, so set header=FALSE
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+pangenome = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome = panpretty(pangenome)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean = NAcheck(pangenome)
+
+# read in taxa key
+taxkey = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# read in COG annotation table
+thaumtab = read.table("annotation/ThaumPangenome.tab", sep="\t", quote = "", stringsAsFactors=FALSE)
+rownames(thaumtab) = thaumtab[,1]
+
+categories = c("D", "M", "N", "O", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "J", "K", "L", "C", "E", "F", "G", "H", "I", "P", "Q", "R", "S")
+
+```
+
+Separate taxa by phylo & temp
+```{r}
+Csub = taxkey[which(taxkey$Type_Phylum == "aig"),1]
+ThFn1 = taxkey[which(taxkey$Type_Taxa == "groupI1c"), 1]
+ThAOA = taxkey[which(taxkey$Type_Taxa == "nitrosocaldales"), 1]
+MesoMAO = taxkey[which(taxkey$Type_Temp == "meso" & taxkey$Type_AO == "AO" | taxkey$Type_Temp == "modthermo" & taxkey$Type_AO == "AO"), 1]
+
+# Get corresponding row number in pangenome_clean for that taxon
+taxlistCsub = taxrownums(df=pangenome_clean, taxa_yes=Csub)
+taxlistThFn1 = taxrownums(df=pangenome_clean, taxa_yes=ThFn1)
+taxlistThAOA = taxrownums(df=pangenome_clean, taxa_yes=ThAOA)
+taxlistMesoMAO = taxrownums(df=pangenome_clean, taxa_yes=MesoMAO)
+
+```
+
+Calculate shared and unique ortholog groups by order
+```{r}
+sharedCsub = sharedgroups(pangenome_clean, taxlistCsub$r_yes)
+uniqueCsub = getunique(pangenome_clean, taxlistCsub$r_yes, taxlistCsub$r_no)
+
+sharedThFn1 = sharedgroups(pangenome_clean, taxlistThFn1$r_yes)
+uniqueThFn1 = getunique(pangenome_clean, taxlistThFn1$r_yes, taxlistThFn1$r_no)
+
+sharedThAOA = sharedgroups(pangenome_clean, taxlistThAOA$r_yes)
+uniqueThAOA = getunique(pangenome_clean, taxlistThAOA$r_yes, taxlistThAOA$r_no)
+
+sharedMesoMAO = sharedgroups(pangenome_clean, taxlistMesoMAO$r_yes)
+uniqueMesoMAO = getunique(pangenome_clean, taxlistMesoMAO$r_yes, taxlistMesoMAO$r_no)
+
+
+```
+
+Summary dataframe of counts (for supplementary tables, etc ...)
+```{r}
+byTemp = data.frame(Csub=c(sharedCsub$yes_strict_ct, sharedCsub$yes_soft_ct,sharedCsub$yes_atleastone_ct, uniqueCsub$yes_strict_ct, uniqueCsub$yes_soft_ct, uniqueCsub$yes_atleastone_ct),
+                     ThFn1=c(sharedThFn1$yes_strict_ct, sharedThFn1$yes_soft_ct,sharedThFn1$yes_atleastone_ct, uniqueThFn1$yes_strict_ct, uniqueThFn1$yes_soft_ct, uniqueThFn1$yes_atleastone_ct),
+                     ThAOA=c(sharedThAOA$yes_strict_ct, sharedThAOA$yes_soft_ct,sharedThAOA$yes_atleastone_ct, uniqueThAOA$yes_strict_ct, uniqueThAOA$yes_soft_ct, uniqueThAOA$yes_atleastone_ct),
+                     MesoMAO=c(sharedMesoMAO$yes_strict_ct, sharedMesoMAO$yes_soft_ct,sharedMesoMAO$yes_atleastone_ct, uniqueMesoMAO$yes_strict_ct, uniqueMesoMAO$yes_soft_ct, uniqueMesoMAO$yes_atleastone_ct))
+
+rownames(byTemp) = c("shared_strict", "shared_soft", "shared_at-least-one", "unique_strict", "unique_soft", "unique_at-least-one")
+
+```
+
+
+
+## Venn Diagrams
+Each ellipse represents a subclade grouping
+```{r}
+# Strict
+temp_strict = list(names(sharedThAOA$yes_strict), names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedMesoMAO$yes_strict))
+
+pdf('rplots/temp-strict_withCsymA.pdf')
+venn(temp_strict, snames = "ThAOA, Csub, ThFn1, MesoMAO", counts =TRUE, zcolor="style", size=500, borders=FALSE, ellipse=TRUE)
+dev.off()
+
+
+# Soft 
+temp_soft = list(names(sharedThAOA$yes_soft), names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedMesoMAO$yes_soft))
+
+pdf('rplots/temp-soft_withCsymA.pdf')
+venn(temp_soft, snames = "ThAOA, Csub, ThFn1, MesoMAO", counts =TRUE, zcolor="style", size=500, borders=FALSE, ellipse=TRUE)
+dev.off()
+
+# At Least One (essentially the "pangenome" of the subclade) -- note that groupI1c is still set to strict since there is only one taxon in this group!
+temp_atleastone = list(names(sharedThAOA$yes_atleastone), names(sharedCsub$yes_strict), names(sharedThFn1$yes_strict), names(sharedMesoMAO$yes_atleastone))
+
+pdf('rplots/temp-atleastone_withCsymA.pdf')
+venn(temp_atleastone, snames = "ThAOA, Csub,  ThFn1, MesoMAO", counts =TRUE, zcolor="style", size=500, borders=FALSE, ellipse=TRUE)
+dev.off()
+
+
+
+```
+
+## Functional Annotation and Enrichment
+### by temp: STRICT
+```{r}
+# Subclade strict core - number of genes
+nCsub_core_C = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_core_C = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nThAOA_core_C = gsub(".faa", "", names(sharedThAOA$yes_strict)) 
+nMesoMAO_core_C = gsub(".faa", "", names(sharedMesoMAO$yes_strict)) 
+
+# Combine all
+coreC_all = Reduce(union, list(nCsub_core_C, nThFn1_core_C, nThAOA_core_C, nMesoMAO_core_C)) 
+cCoreC_all = getcounts(coreC_all, categories, thaumtab)
+names(cCoreC_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_core_C = getcounts(nCsub_core_C, categories, thaumtab) 
+cThFn1_core_C = getcounts(nThFn1_core_C, categories, thaumtab) 
+cThAOA_core_C = getcounts(nThAOA_core_C, categories, thaumtab) 
+cMesoMAO_core_C = getcounts(nMesoMAO_core_C, categories, thaumtab) 
+
+```
+
+SOFT
+```{r}
+# Subclade soft core - number of genes
+nCsub_core_F = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_core_F = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nThAOA_core_F = gsub(".faa", "", names(sharedThAOA$yes_soft)) 
+nMesoMAO_core_F = gsub(".faa", "", names(sharedMesoMAO$yes_soft)) 
+
+# Combine all
+coreF_all = Reduce(union, list(nCsub_core_F, nThFn1_core_F, nThAOA_core_F, nMesoMAO_core_F)) 
+cCoreF_all = getcounts(coreF_all, categories, thaumtab)
+names(cCoreF_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_core_F = getcounts(nCsub_core_F, categories, thaumtab) 
+cThFn1_core_F = getcounts(nThFn1_core_F, categories, thaumtab) 
+cThAOA_core_F = getcounts(nThAOA_core_F, categories, thaumtab) 
+cMesoMAO_core_F = getcounts(nMesoMAO_core_F, categories, thaumtab) 
+
+```
+
+AT LEAST ONE
+```{r}
+# number of genes
+nCsub_one = gsub(".faa", "", names(sharedCsub$yes_strict)) 
+nThFn1_one = gsub(".faa", "", names(sharedThFn1$yes_strict)) 
+nThAOA_one = gsub(".faa", "", names(sharedThAOA$yes_atleastone)) 
+nMesoMAO_one = gsub(".faa", "", names(sharedMesoMAO$yes_atleastone)) 
+
+# Combine all
+coreOne_all = Reduce(union, list(nCsub_one, nThFn1_one, nThAOA_one, nMesoMAO_one)) 
+cCoreOne_all = getcounts(coreOne_all, categories, thaumtab)
+names(cCoreF_all) = c(categories, "NA")
+
+# number of annotations
+cCsub_one = getcounts(nCsub_one, categories, thaumtab) 
+cThFn1_one = getcounts(nThFn1_one, categories, thaumtab) 
+cThAOA_one = getcounts(nThAOA_one, categories, thaumtab) 
+cMesoMAO_one = getcounts(nMesoMAO_one, categories, thaumtab) 
+
+```
+
+Lineage Specific
+Strict
+```{r}
+# ThFn1 and MesoMAO - "MesoALL"
+antiMesoALL_C = union(nThAOA_core_C, nCsub_core_C)
+intMesoALL_C = intersect(nThFn1_core_C, nMesoMAO_core_C)
+nMesoALL_lin_C = intMesoALL_C[!intMesoALL_C %in% antiMesoALL_C]
+cMesoALL_lin_C = getcounts(nMesoALL_lin_C, categories, thaumtab)
+
+# MesoMAO
+antiMesoMAO_C = Reduce(union, list(nThAOA_core_C, nCsub_core_C, nThFn1_core_C))
+nMesoMAO_lin_C = nMesoMAO_core_C[!nMesoMAO_core_C %in% antiMesoMAO_C]
+cMesoMAO_lin_C = getcounts(nMesoMAO_lin_C, categories, thaumtab)
+
+# Csub and ThAOA - "ThermoALL"
+antiThermoALL_C = union(nThFn1_core_C, nMesoMAO_core_C)
+intThermoALL_C = intersect(nCsub_core_C, nThAOA_core_C)
+nThermoALL_lin_C = intThermoALL_C[!intThermoALL_C %in% antiThermoALL_C]
+cThermoALL_lin_C = getcounts(nThermoALL_lin_C, categories, thaumtab)
+
+# ThAOA
+antiThermoAOA_C = Reduce(union, list(nCsub_core_C, nThFn1_core_C, nMesoMAO_core_C))
+nThAOA_lin_C = nThAOA_core_C[!nThAOA_core_C %in% antiThermoAOA_C]
+cThAOA_lin_C = getcounts(nThAOA_lin_C, categories, thaumtab)
+
+```
+
+Soft
+```{r}
+# ThFn1 and MesoMAO - "MesoALL"
+antiMesoALL_F = union(nThAOA_core_F, nCsub_core_F)
+intMesoALL_F = intersect(nThFn1_core_F, nMesoMAO_core_F)
+nMesoALL_lin_F = intMesoALL_F[!intMesoALL_F %in% antiMesoALL_F]
+cMesoALL_lin_F = getcounts(nMesoALL_lin_F, categories, thaumtab)
+
+# MesoMAO
+antiMesoMAO_F = Reduce(union, list(nThAOA_core_F, nCsub_core_F, nThFn1_core_F))
+nMesoMAO_lin_F = nMesoMAO_core_F[!nMesoMAO_core_F %in% antiMesoMAO_F]
+cMesoMAO_lin_F = getcounts(nMesoMAO_lin_F, categories, thaumtab)
+
+# Csub and ThAOA - "ThermoALL"
+antiThermoALL_F = union(nThFn1_core_F, nMesoMAO_core_F)
+intThermoALL_F = intersect(nCsub_core_F, nThAOA_core_F)
+nThermoALL_lin_F = intThermoALL_F[!intThermoALL_F %in% antiThermoALL_F]
+cThermoALL_lin_F = getcounts(nThermoALL_lin_F, categories, thaumtab)
+
+# ThAOA
+antiThermoAOA_F = Reduce(union, list(nCsub_core_F, nThFn1_core_F, nMesoMAO_core_F))
+nThAOA_lin_F = nThAOA_core_F[!nThAOA_core_F %in% antiThermoAOA_F]
+cThAOA_lin_F = getcounts(nThAOA_lin_F, categories, thaumtab)
+
+```
+
+At least one
+```{r}
+# ThFn1 and MesoMAO - "MesoALL"
+antiMesoALL_one = union(nThAOA_one, nCsub_one)
+intMesoALL_one = intersect(nThFn1_one, nMesoMAO_one)
+nMesoALL_lin_one = intMesoALL_one[!intMesoALL_one %in% antiMesoALL_one]
+cMesoALL_lin_one = getcounts(nMesoALL_lin_one, categories, thaumtab)
+
+# MesoMAO
+antiMesoMAO_one = Reduce(union, list(nThAOA_one, nCsub_one, nThFn1_one))
+nMesoMAO_lin_one = nMesoMAO_one[!nMesoMAO_one %in% antiMesoMAO_one]
+cMesoMAO_lin_one = getcounts(nMesoMAO_lin_one, categories, thaumtab)
+
+# Csub and ThAOA - "ThermoALL"
+antiThermoALL_one = union(nThFn1_one, nMesoMAO_one)
+intThermoALL_one = intersect(nCsub_one, nThAOA_one)
+nThermoALL_lin_one = intThermoALL_one[!intThermoALL_one %in% antiThermoALL_one]
+cThermoALL_lin_one = getcounts(nThermoALL_lin_one, categories, thaumtab)
+
+# ThAOA
+antiThermoAOA_one = Reduce(union, list(nCsub_one, nThFn1_one, nMesoMAO_one))
+nThAOA_lin_one = nThAOA_one[!nThAOA_one %in% antiThermoAOA_one]
+cThAOA_lin_one = getcounts(nThAOA_lin_one, categories, thaumtab)
+
+```
+
+CONTINGENCY TABLES
+MesoALL
+```{r}
+mesoALLDF_lin_C = data.frame(
+  lin_in_cat = cMesoALL_lin_C, # lineage specific 
+  lin_not_cat = sum(cMesoALL_lin_C)-cMesoALL_lin_C, 
+  nlin_in_cat = cCoreC_all - cMesoALL_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cMesoALL_lin_C)) - (cCoreC_all - cMesoALL_lin_C), stringsAsFactors=FALSE)
+
+mesoALLP_lin_C = apply(mesoALLDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+mesoALLDF_lin_F = data.frame(
+  lin_in_cat = cMesoALL_lin_F, # lineage specific 
+  lin_not_cat = sum(cMesoALL_lin_F)-cMesoALL_lin_F, 
+  nlin_in_cat = cCoreF_all - cMesoALL_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cMesoALL_lin_F)) - (cCoreF_all - cMesoALL_lin_F), stringsAsFactors=FALSE)
+
+mesoALLP_lin_F = apply(mesoALLDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+mesoALLDF_lin_one = data.frame(
+  lin_in_cat = cMesoALL_lin_one, # lineage specific 
+  lin_not_cat = sum(cMesoALL_lin_one)-cMesoALL_lin_one, 
+  nlin_in_cat = cCoreOne_all - cMesoALL_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cMesoALL_lin_one)) - (cCoreOne_all - cMesoALL_lin_one), stringsAsFactors=FALSE)
+
+mesoALLP_lin_one = apply(mesoALLDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+MesoMAO
+```{r}
+mesoMAODF_lin_C = data.frame(
+  lin_in_cat = cMesoMAO_lin_C, # lineage specific 
+  lin_not_cat = sum(cMesoMAO_lin_C)-cMesoMAO_lin_C, 
+  nlin_in_cat = cCoreC_all - cMesoMAO_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cMesoMAO_lin_C)) - (cCoreC_all - cMesoMAO_lin_C), stringsAsFactors=FALSE)
+
+mesoMAOP_lin_C = apply(mesoMAODF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+mesoMAODF_lin_F = data.frame(
+  lin_in_cat = cMesoMAO_lin_F, # lineage specific 
+  lin_not_cat = sum(cMesoMAO_lin_F)-cMesoMAO_lin_F, 
+  nlin_in_cat = cCoreF_all - cMesoMAO_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cMesoMAO_lin_F)) - (cCoreF_all - cMesoMAO_lin_F), stringsAsFactors=FALSE)
+
+mesoMAOP_lin_F = apply(mesoMAODF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+mesoMAODF_lin_one = data.frame(
+  lin_in_cat = cMesoMAO_lin_one, # lineage specific 
+  lin_not_cat = sum(cMesoMAO_lin_one)-cMesoMAO_lin_one, 
+  nlin_in_cat = cCoreOne_all - cMesoMAO_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cMesoMAO_lin_one)) - (cCoreOne_all - cMesoMAO_lin_one), stringsAsFactors=FALSE)
+
+mesoMAOP_lin_one = apply(mesoMAODF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+ThermoALL
+```{r}
+thermoALLDF_lin_C = data.frame(
+  lin_in_cat = cThermoALL_lin_C, # lineage specific 
+  lin_not_cat = sum(cThermoALL_lin_C)-cThermoALL_lin_C, 
+  nlin_in_cat = cCoreC_all - cThermoALL_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cThermoALL_lin_C)) - (cCoreC_all - cThermoALL_lin_C), stringsAsFactors=FALSE)
+
+thermoALLP_lin_C = apply(thermoALLDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+thermoALLDF_lin_F = data.frame(
+  lin_in_cat = cThermoALL_lin_F, # lineage specific 
+  lin_not_cat = sum(cThermoALL_lin_F)-cThermoALL_lin_F, 
+  nlin_in_cat = cCoreF_all - cThermoALL_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cThermoALL_lin_F)) - (cCoreF_all - cThermoALL_lin_F), stringsAsFactors=FALSE)
+
+thermoALLP_lin_F = apply(thermoALLDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+thermoALLDF_lin_one = data.frame(
+  lin_in_cat = cThermoALL_lin_one, # lineage specific 
+  lin_not_cat = sum(cThermoALL_lin_one)-cThermoALL_lin_one, 
+  nlin_in_cat = cCoreOne_all - cThermoALL_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cThermoALL_lin_one)) - (cCoreOne_all - cThermoALL_lin_one), stringsAsFactors=FALSE)
+
+thermoALLP_lin_one = apply(thermoALLDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+ThAOA
+```{r}
+thAOADF_lin_C = data.frame(
+  lin_in_cat = cThAOA_lin_C, # lineage specific 
+  lin_not_cat = sum(cThAOA_lin_C)-cThAOA_lin_C, 
+  nlin_in_cat = cCoreC_all - cThAOA_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cThAOA_lin_C)) - (cCoreC_all - cThAOA_lin_C), stringsAsFactors=FALSE)
+
+thAOAP_lin_C = apply(thAOADF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+thAOADF_lin_F = data.frame(
+  lin_in_cat = cThAOA_lin_F, # lineage specific 
+  lin_not_cat = sum(cThAOA_lin_F)-cThAOA_lin_F, 
+  nlin_in_cat = cCoreF_all - cThAOA_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cThAOA_lin_F)) - (cCoreF_all - cThAOA_lin_F), stringsAsFactors=FALSE)
+
+thAOAP_lin_F = apply(thAOADF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+thAOADF_lin_one = data.frame(
+  lin_in_cat = cThAOA_lin_one, # lineage specific 
+  lin_not_cat = sum(cThAOA_lin_one)-cThAOA_lin_one, 
+  nlin_in_cat = cCoreOne_all - cThAOA_lin_one,
+  nlin_not_cat = (sum(cCoreOne_all) - sum(cThAOA_lin_one)) - (cCoreOne_all - cThAOA_lin_one), stringsAsFactors=FALSE)
+
+thAOAP_lin_one = apply(thAOADF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+```
+
+
+Combine, correct, pick sig
+```{r}
+# MesoALL
+mesoALLP_all = as.data.frame(cbind(mesoALLP_lin_C, mesoALLP_lin_F, mesoALLP_lin_one), stringsAsFactors = FALSE)
+mesoALLP_all_corrected = sapply(mesoALLP_all, p.adjust, method="bonferroni")
+rownames(mesoALLP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+mesoALLP_sig = which(mesoALLP_all_corrected < .05, arr.ind=T)
+mesoALLP_sig_names = as.data.frame(cbind(rownames(mesoALLP_sig), colnames(mesoALLP_all_corrected[,mesoALLP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(mesoALLP_sig_names) = c("category", "ellipse_type")
+
+mesoALLP_sig_sorted = aggregate(ellipse_type ~ category, mesoALLP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+
+# MesoMAO
+mesoMAOP_all = as.data.frame(cbind(mesoMAOP_lin_C, mesoMAOP_lin_F, mesoMAOP_lin_one), stringsAsFactors = FALSE)
+mesoMAOP_all_corrected = sapply(mesoMAOP_all, p.adjust, method="bonferroni")
+rownames(mesoMAOP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+mesoMAOP_sig = which(mesoMAOP_all_corrected < .05, arr.ind=T)
+mesoMAOP_sig_names = as.data.frame(cbind(rownames(mesoMAOP_sig), colnames(mesoMAOP_all_corrected[,mesoMAOP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(mesoMAOP_sig_names) = c("category", "ellipse_type")
+
+mesoMAOP_sig_sorted = aggregate(ellipse_type ~ category, mesoMAOP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+# ThermoALL
+thermoALLP_all = as.data.frame(cbind(thermoALLP_lin_C, thermoALLP_lin_F, thermoALLP_lin_one), stringsAsFactors = FALSE)
+thermoALLP_all_corrected = sapply(thermoALLP_all, p.adjust, method="bonferroni")
+rownames(thermoALLP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+thermoALLP_sig = which(thermoALLP_all_corrected < .05, arr.ind=T)
+thermoALLP_sig_names = as.data.frame(cbind(rownames(thermoALLP_sig), colnames(thermoALLP_all_corrected[,thermoALLP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(thermoALLP_sig_names) = c("category", "ellipse_type")
+
+thermoALLP_sig_sorted = aggregate(ellipse_type ~ category, thermoALLP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+# ThAOA
+thAOAP_all = as.data.frame(cbind(thAOAP_lin_C, thAOAP_lin_F, thAOAP_lin_one), stringsAsFactors = FALSE)
+thAOAP_all_corrected = sapply(thAOAP_all, p.adjust, method="bonferroni")
+rownames(thAOAP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+thAOAP_sig = which(thAOAP_all_corrected < .05, arr.ind=T)
+thAOAP_sig_names = as.data.frame(cbind(rownames(thAOAP_sig), colnames(thAOAP_all_corrected[,thAOAP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(thAOAP_sig_names) = c("category", "ellipse_type")
+
+thAOAP_sig_sorted = aggregate(ellipse_type ~ category, thAOAP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+```
