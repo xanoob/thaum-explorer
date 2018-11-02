@@ -1,0 +1,65 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Load pangenome
+
+```{r}
+
+# headers are incorrectly imported by read.csv, so set header=FALSE
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+pangenome = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome = panpretty(pangenome)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean = NAcheck(pangenome)
+
+# read in taxa key
+taxkey = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# shared
+thaum = taxkey[which(taxkey$Type_Phylum == "thaum" & taxkey$Taxa_Short != "CsymA"),1]
+taxlistThaum = taxrownums(df=pangenome_clean, taxa_yes=thaum)
+sharedpan = sharedgroups(pangenome_clean, taxlistThaum$r_yes)
+```
+
+CsymA+
+```{r}
+
+thaumCsymA = taxkey[which(taxkey$Type_Phylum == "thaum"),1]
+taxlistThaumCsymA = taxrownums(df=pangenome_clean, taxa_yes=thaumCsymA)
+sharedThaumCsymA = sharedgroups(pangenome_clean, taxlistThaumCsymA$r_yes)
+
+thaumCsymA_sub = pangenome_clean[,sharedThaumCsymA$yes_strict]
+thaumCsymA_sub_removeCsub = thaumCsymA_sub[!rownames(thaumCsymA_sub) %in% "Csub",]
+
+# find single copy
+singlecopyWithCsymA = thaumCsymA_sub_removeCsub[,apply(thaumCsymA_sub_removeCsub, 2, function(x) all(x == 1))]
+singlecopyWithCsymA_names = colnames(singlecopyWithCsymA)
+
+writeLines(singlecopyWithCsymA_names, "ThaumSingleCopy_CsymA.txt")
+
+```
+
+
+CsymA-
+```{r}
+thaumnoCsymA = taxkey[which(taxkey$Type_Phylum == "thaum" & taxkey$Taxa_Short != "CsymA"),1]
+taxlistThaumnoCsymA = taxrownums(df=pangenome_clean, taxa_yes=thaum)
+sharedThaumnoCsymA = sharedgroups(pangenome_clean, taxlistThaumnoCsymA$r_yes)
+
+thaumnoCsymA_sub = pangenome_clean[,sharedThaumnoCsymA$yes_strict]
+thaumnoCsymA_sub_removeCsub = thaumnoCsymA_sub[!rownames(thaumnoCsymA_sub) %in% "Csub",]
+
+# find single copy
+singlecopyNoCsymA = thaumnoCsymA_sub_removeCsub[,apply(thaumnoCsymA_sub_removeCsub, 2, function(x) all(x == 1))]
+singlecopyNoCsymA_names = colnames(singlecopyNoCsymA)
+
+writeLines(singlecopyNoCsymA_names, "ThaumSingleCopy_noCsymA.txt")
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
