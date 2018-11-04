@@ -1,0 +1,167 @@
+---
+title: "Compare GH runs 1-7"
+output: html_notebook
+---
+
+Examine how reported numbers of shared ortholog families change with 
+* adding some taxa
+* removing taxa with "contaminated" / poor quality genome seqs
+* difference between "native" and re-genecalled (with Prodigal) genome seqs
+* are there any differences in clustering between runs
+
+Read in pangenome matrices from all runs (1-7)
+```{r}
+library(crabrawlR)
+
+# Run 1: GH version 2017-08-28. Includes incomplete/contaminated Nitrosopumilus sp. AR and Thaumarchaeota archaeon BS1-3
+pan1 = read.csv("panmatrices/Run1_COGT-56_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan1 = panpretty(pan1)
+pan1_clean = NAcheck(pan1)
+
+# Run 2: GH version 2017-08-28. Remove NspAR and ThBS1-3 (above), add Nitrosotenuis aquariensis AQ6F, Nitrosotalea bavarica SBT1, Nitrosotalea sinensis Nd2, Nitrosotalea okcheonensis CS1, Thaumarchaeota CSP1
+pan2 = read.csv("panmatrices/Run2_COGT-57_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan2 = panpretty(pan2)
+pan2_clean = NAcheck(pan2)
+
+# Run 3: GH version 2017-08-28. Same taxa as #2, all assemblies downloaded from NCBI/IMG gene-called with Prodigal
+pan3 = read.csv("panmatrices/Run3_COGT-57-re_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan3 = panpretty(pan3)
+pan3_clean = NAcheck(pan3)
+
+# Run 4: GH version 2017-08-28.  Add Nitrosopumilus sp DDS1, Nitrosocaldus cavascurensis SCU2, Nitrosocaldus islandicus 3F, Archaeon bin HR04 to taxa list used in Run 3. All new taxa gene-called with Prodigal.
+pan4 = read.csv("panmatrices/Run4_COGT-61-re_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan4 = panpretty(pan4)
+pan4_clean = NAcheck(pan4)
+
+# Run 5: GH version 2017-08-28.  Remove assemblies less than 95% according to CheckM. Removed Archaeon bin HR04, NsalBD31, NkorAR1, NspDDS1, ThDS1, ThBS4, CaerOS1.
+pan5 = read.csv("panmatrices/Run5_COGT-53-re_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan5 = panpretty(pan5)
+pan5_clean = NAcheck(pan5)
+
+# Run 6: NEW GH version 2018-03-12. Same taxa as Run 5. Slightly different family per group counts as Run 5. 
+pan6 = read.csv("~/Desktop/thaum/panmatrices/Run6_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan6 = panpretty(pan6)
+pan6_clean = NAcheck(pan6)
+
+# Run 7: NEW GH version 2018-03-12. Same taxa as Run 5 and 6, to confirm we are getting the same number of families in a group using the same software version.
+pan7 = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan7 = panpretty(pan7)
+pan7_clean = NAcheck(pan7)
+
+# Run 8: Remove CsymA 
+pan8 = read.csv("panmatrices/Run8_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan8 = panpretty(pan8)
+pan8_clean = NAcheck(pan8)
+```
+
+Load taxalists 
+```{r}
+R1_taxa = read.table("taxalists/taxlistR1.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+R2R3_taxa = read.table("taxalists/taxlistR2R3.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+R4_taxa = read.table("taxalists/taxlistR4.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+R5R6R7_taxa = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+R8_taxa = read.table("taxalists/taxlistR8.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+```
+
+Separate by Phylum Status 
+```{r}
+# Run 1
+thaumR1 = R1_taxa[which(R1_taxa$Type_Phylum == "thaum"),1]
+aigR1 = R1_taxa[which(R1_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR1 = taxrownums(df=pan1_clean, taxa_yes=thaumR1)
+taxlistAigR1 = taxrownums(df=pan1_clean, taxa_yes=aigR1)
+
+# Run 2
+thaumR2 = R2R3_taxa[which(R2R3_taxa$Type_Phylum == "thaum"),1]
+aigR2 = R2R3_taxa[which(R2R3_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR2 = taxrownums(df=pan2_clean, taxa_yes=thaumR2)
+taxlistAigR2 = taxrownums(df=pan2_clean, taxa_yes=aigR2)
+
+# Run 3
+thaumR3 = R2R3_taxa[which(R2R3_taxa$Type_Phylum == "thaum"),1]
+aigR3 = R2R3_taxa[which(R2R3_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR3 = taxrownums(df=pan3_clean, taxa_yes=thaumR3)
+taxlistAigR3 = taxrownums(df=pan3_clean, taxa_yes=aigR3)
+
+# Run 4
+thaumR4 = R4_taxa[which(R4_taxa$Type_Phylum == "thaum"),1]
+aigR4 = R4_taxa[which(R4_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR4 = taxrownums(df=pan4_clean, taxa_yes=thaumR4)
+taxlistAigR4 = taxrownums(df=pan4_clean, taxa_yes=aigR4)
+
+# Run 5
+thaumR5 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "thaum"),1]
+aigR5 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR5 = taxrownums(df=pan5_clean, taxa_yes=thaumR5)
+taxlistAigR5 = taxrownums(df=pan5_clean, taxa_yes=aigR5)
+
+# Run 6
+thaumR6 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "thaum"),1]
+aigR6 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR6 = taxrownums(df=pan6_clean, taxa_yes=thaumR6)
+taxlistAigR6 = taxrownums(df=pan6_clean, taxa_yes=aigR6)
+
+# Run 7
+thaumR7 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "thaum"),1]
+aigR7 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR7 = taxrownums(df=pan7_clean, taxa_yes=thaumR7)
+taxlistAigR7 = taxrownums(df=pan7_clean, taxa_yes=aigR7)
+
+# Run 8
+thaumR8 = R8_taxa[which(R8_taxa$Type_Phylum == "thaum"),1]
+aigR8 = R8_taxa[which(R8_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR8 = taxrownums(df=pan8_clean, taxa_yes=thaumR8)
+taxlistAigR8 = taxrownums(df=pan8_clean, taxa_yes=aigR8)
+
+```
+
+```{r}
+# Run 1
+sharedpanR1 = sharedgroups(pan1_clean, taxlistThaumR1$r_yes)
+uniqueThaumR1 = getunique(pan1_clean, taxlistThaumR1$r_yes, taxlistAigR1$r_yes)
+R1_summary = c(sharedpanR1$yes_strict_ct, sharedpanR1$yes_soft_ct, sharedpanR1$yes_shell_ct, sharedpanR1$yes_cloud_ct,sharedpanR1$yes_atleastone_ct, uniqueThaumR1$yes_strict_ct, uniqueThaumR1$yes_soft_ct,uniqueThaumR1$yes_shell_ct, uniqueThaumR1$yes_cloud_ct, uniqueThaumR1$yes_atleastone_ct)
+
+# Run 2
+sharedpanR2 = sharedgroups(pan2_clean, taxlistThaumR2$r_yes)
+uniqueThaumR2 = getunique(pan2_clean, taxlistThaumR2$r_yes, taxlistAigR2$r_yes)
+R2_summary = c(sharedpanR2$yes_strict_ct, sharedpanR2$yes_soft_ct, sharedpanR2$yes_shell_ct, sharedpanR2$yes_cloud_ct,sharedpanR2$yes_atleastone_ct, uniqueThaumR2$yes_strict_ct, uniqueThaumR2$yes_soft_ct,uniqueThaumR2$yes_shell_ct, uniqueThaumR2$yes_cloud_ct, uniqueThaumR2$yes_atleastone_ct)
+
+# Run 3
+sharedpanR3 = sharedgroups(pan3_clean, taxlistThaumR3$r_yes)
+uniqueThaumR3 = getunique(pan3_clean, taxlistThaumR3$r_yes, taxlistAigR3$r_yes)
+R3_summary = c(sharedpanR3$yes_strict_ct, sharedpanR3$yes_soft_ct, sharedpanR3$yes_shell_ct, sharedpanR3$yes_cloud_ct,sharedpanR3$yes_atleastone_ct, uniqueThaumR3$yes_strict_ct, uniqueThaumR3$yes_soft_ct,uniqueThaumR3$yes_shell_ct, uniqueThaumR3$yes_cloud_ct, uniqueThaumR3$yes_atleastone_ct)
+
+# Run 4
+sharedpanR4 = sharedgroups(pan4_clean, taxlistThaumR4$r_yes)
+uniqueThaumR4 = getunique(pan4_clean, taxlistThaumR4$r_yes, taxlistAigR4$r_yes)
+R4_summary = c(sharedpanR4$yes_strict_ct, sharedpanR4$yes_soft_ct, sharedpanR4$yes_shell_ct, sharedpanR4$yes_cloud_ct,sharedpanR4$yes_atleastone_ct, uniqueThaumR4$yes_strict_ct, uniqueThaumR4$yes_soft_ct,uniqueThaumR4$yes_shell_ct, uniqueThaumR4$yes_cloud_ct, uniqueThaumR4$yes_atleastone_ct)
+
+# Run 5
+sharedpanR5 = sharedgroups(pan5_clean, taxlistThaumR5$r_yes)
+uniqueThaumR5 = getunique(pan5_clean, taxlistThaumR5$r_yes, taxlistAigR5$r_yes)
+R5_summary = c(sharedpanR5$yes_strict_ct, sharedpanR5$yes_soft_ct, sharedpanR5$yes_shell_ct, sharedpanR5$yes_cloud_ct,sharedpanR5$yes_atleastone_ct, uniqueThaumR5$yes_strict_ct, uniqueThaumR5$yes_soft_ct,uniqueThaumR5$yes_shell_ct, uniqueThaumR5$yes_cloud_ct, uniqueThaumR5$yes_atleastone_ct)
+
+# Run 6
+sharedpanR6 = sharedgroups(pan6_clean, taxlistThaumR6$r_yes)
+uniqueThaumR6 = getunique(pan6_clean, taxlistThaumR6$r_yes, taxlistAigR6$r_yes)
+R6_summary = c(sharedpanR6$yes_strict_ct, sharedpanR6$yes_soft_ct, sharedpanR6$yes_shell_ct, sharedpanR6$yes_cloud_ct,sharedpanR6$yes_atleastone_ct, uniqueThaumR6$yes_strict_ct, uniqueThaumR6$yes_soft_ct,uniqueThaumR6$yes_shell_ct, uniqueThaumR6$yes_cloud_ct, uniqueThaumR6$yes_atleastone_ct)
+
+# Run 7
+sharedpanR7 = sharedgroups(pan7_clean, taxlistThaumR7$r_yes)
+uniqueThaumR7 = getunique(pan7_clean, taxlistThaumR7$r_yes, taxlistAigR7$r_yes)
+R7_summary = c(sharedpanR7$yes_strict_ct, sharedpanR7$yes_soft_ct, sharedpanR7$yes_shell_ct, sharedpanR7$yes_cloud_ct,sharedpanR7$yes_atleastone_ct, uniqueThaumR7$yes_strict_ct, uniqueThaumR7$yes_soft_ct,uniqueThaumR7$yes_shell_ct, uniqueThaumR7$yes_cloud_ct, uniqueThaumR7$yes_atleastone_ct)
+
+# Run 8
+sharedpanR8 = sharedgroups(pan8_clean, taxlistThaumR8$r_yes)
+uniqueThaumR8 = getunique(pan8_clean, taxlistThaumR8$r_yes, taxlistAigR8$r_yes)
+R8_summary = c(sharedpanR8$yes_strict_ct, sharedpanR8$yes_soft_ct, sharedpanR8$yes_shell_ct, sharedpanR8$yes_cloud_ct,sharedpanR8$yes_atleastone_ct, uniqueThaumR8$yes_strict_ct, uniqueThaumR8$yes_soft_ct,uniqueThaumR8$yes_shell_ct, uniqueThaumR8$yes_cloud_ct, uniqueThaumR8$yes_atleastone_ct)
+
+
+# All
+Rall_summary = rbind(R1_summary, R2_summary, R3_summary, R4_summary, R5_summary, R6_summary, R7_summary, R8_summary)
+colnames(Rall_summary) = c("core", "soft-core", "shell", "cloud", "pangenome_size", "unique_core", "unique_soft-core", "unique_shell", "unique_cloud", "unique_pangenome")
+
+
+```
+
+
