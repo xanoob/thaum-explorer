@@ -1,0 +1,49 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Load pmatrices
+```{r}
+# Run 7: NEW GH version 2018-03-12. Same taxa as Run 5 and 6, to confirm we are getting the same number of families in a group using the same software version.
+pan7 = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan7 = panpretty(pan7)
+pan7_clean = NAcheck(pan7)
+
+# Run 8: Remove CsymA 
+pan8 = read.csv("panmatrices/Run8_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+pan8 = panpretty(pan8)
+pan8_clean = NAcheck(pan8)
+```
+
+
+Load taxalists
+```{r}
+R5R6R7_taxa = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+R8_taxa = read.table("taxalists/taxlistR8.tab", header=TRUE, stringsAsFactors=FALSE, fill=TRUE)
+
+thaumR7 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "thaum"),1]
+aigR7 = R5R6R7_taxa[which(R5R6R7_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR7 = taxrownums(df=pan7_clean, taxa_yes=thaumR7)
+taxlistAigR7 = taxrownums(df=pan7_clean, taxa_yes=aigR7)
+
+thaumR8 = R8_taxa[which(R8_taxa$Type_Phylum == "thaum"),1]
+aigR8 = R8_taxa[which(R8_taxa$Type_Phylum == "aig"),1]
+taxlistThaumR8 = taxrownums(df=pan8_clean, taxa_yes=thaumR8)
+taxlistAigR8 = taxrownums(df=pan8_clean, taxa_yes=aigR8)
+
+```
+
+Get Shared
+```{r}
+
+sharedpanR7 = sharedgroups(pan7_clean, taxlistThaumR7$r_yes)
+sharedpanR8 = sharedgroups(pan8_clean, taxlistThaumR8$r_yes)
+
+pangenomelistR7 = names(sharedpanR7$yes_atleastone)
+pangenomelistR8 = names(sharedpanR8$yes_atleastone)
+
+# list of gene family filenames to run to BLASToise
+writeLines(pangenomelistR7, "annotation/R7_pangenome_fnames.txt")
+writeLines(pangenomelistR8, "annotation/R8_pangenome_fnames.txt")
+
+```
