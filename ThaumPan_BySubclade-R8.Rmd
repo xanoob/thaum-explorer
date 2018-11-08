@@ -1,0 +1,489 @@
+---
+title: "Thaum Pangenome Analysis: By Subclade"
+output: html_notebook
+---
+
+## Preliminary
+Load necessary packages
+```{r}
+library(crabrawlR)
+library(stringr)
+library(venn)
+
+```
+
+Load pangenome matrix and "clean" it (remove NAs), load taxa key
+```{r}
+# headers are incorrectly imported by read.csv, so set header=FALSE
+# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
+pangenome = read.csv("panmatrices/Run8_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome = panpretty(pangenome)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean = NAcheck(pangenome)
+
+# read in taxa key
+taxkey = read.table("taxalists/taxlistR8.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# read in COG annotation table
+thaumtab = read.table("annotation/R8ThaumAnno.tab", sep="\t", quote = "", stringsAsFactors=FALSE)
+rownames(thaumtab) = thaumtab[,1]
+
+categories = c("D", "M", "N", "O", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "J", "K", "L", "C", "E", "F", "G", "H", "I", "P", "Q", "R", "S")
+
+```
+
+
+Examine subclade specific genes
+* What functional categories are enriched in lineage specific core genes (vs. the whole subclade core)
+
+```{r}
+# Get taxa "shortname", e.g. "Nisl3F" for Nitrosocaldus islandicus 3F
+nitrosopumilales = taxkey[which(taxkey$Type_Taxa == "nitrosopumilales"),1]
+nitrososphaerales = taxkey[which(taxkey$Type_Taxa == "nitrososphaerales"),1]
+nitrosotaleales = taxkey[which(taxkey$Type_Taxa == "nitrosotaleales"),1]
+nitrosocaldales = taxkey[which(taxkey$Type_Taxa == "nitrosocaldales"),1]
+groupI1c = taxkey[which(taxkey$Type_Taxa == "groupI1c"),1]
+
+# Get corresponding row number in pangenome_clean for that taxon
+taxlistNitrosopumilales = taxrownums(df=pangenome_clean, taxa_yes=nitrosopumilales)
+taxlistNitrososphaerales= taxrownums(df=pangenome_clean, taxa_yes=nitrososphaerales)
+taxlistNitrosotaleales = taxrownums(df=pangenome_clean, taxa_yes=nitrosotaleales)
+taxlistNitrosocaldales = taxrownums(df=pangenome_clean, taxa_yes=nitrosocaldales)
+taxlistgroupI1c = taxrownums(df=pangenome_clean, taxa_yes=groupI1c)
+```
+
+Calculate shared and unique ortholog groups by order
+```{r}
+sharedNitrosopumilales = sharedgroups(pangenome_clean, taxlistNitrosopumilales$r_yes)
+uniqueNitrosopumilales = getunique(pangenome_clean, taxlistNitrosopumilales$r_yes, taxlistNitrosopumilales$r_no)
+
+sharedNitrososphaerales = sharedgroups(pangenome_clean, taxlistNitrososphaerales$r_yes)
+uniqueNitrososphaerales = getunique(pangenome_clean, taxlistNitrososphaerales$r_yes, taxlistNitrososphaerales$r_no)
+
+sharedNitrosotaleales = sharedgroups(pangenome_clean, taxlistNitrosotaleales$r_yes)
+uniqueNitrosotaleales = getunique(pangenome_clean, taxlistNitrosotaleales$r_yes, taxlistNitrosotaleales$r_no)
+
+sharedNitrosocaldales = sharedgroups(pangenome_clean, taxlistNitrosocaldales$r_yes)
+uniqueNitrosocaldales = getunique(pangenome_clean, taxlistNitrosocaldales$r_yes, taxlistNitrosocaldales$r_no)
+
+sharedgroupI1c = sharedgroups(pangenome_clean, taxlistgroupI1c$r_yes)
+uniquegroupI1c = getunique(pangenome_clean, taxlistgroupI1c$r_yes, taxlistgroupI1c$r_no)
+
+```
+
+Summary dataframe of counts (for supplementary tables, etc ...)
+```{r}
+byOrder = data.frame(Nitrosopumilales=c(sharedNitrosopumilales$yes_strict_ct, sharedNitrosopumilales$yes_soft_ct,sharedNitrosopumilales$yes_atleastone_ct, uniqueNitrosopumilales$yes_strict_ct, uniqueNitrosopumilales$yes_soft_ct, uniqueNitrosopumilales$yes_atleastone_ct),
+                     Nitrososphaerales=c(sharedNitrososphaerales$yes_strict_ct, sharedNitrososphaerales$yes_soft_ct,sharedNitrososphaerales$yes_atleastone_ct, uniqueNitrososphaerales$yes_strict_ct, uniqueNitrososphaerales$yes_soft_ct, uniqueNitrososphaerales$yes_atleastone_ct),
+                     Nitrosotaleales=c(sharedNitrosotaleales$yes_strict_ct, sharedNitrosotaleales$yes_soft_ct,sharedNitrosotaleales$yes_atleastone_ct, uniqueNitrosotaleales$yes_strict_ct, uniqueNitrosotaleales$yes_soft_ct, uniqueNitrosotaleales$yes_atleastone_ct),
+                     Nitrosocaldales=c(sharedNitrosocaldales$yes_strict_ct, sharedNitrosocaldales$yes_soft_ct,sharedNitrosocaldales$yes_atleastone_ct, uniqueNitrosocaldales$yes_strict_ct, uniqueNitrosocaldales$yes_soft_ct, uniqueNitrosocaldales$yes_atleastone_ct),
+                     groupI1c=c(sharedgroupI1c$yes_strict_ct, sharedgroupI1c$yes_soft_ct,sharedgroupI1c$yes_atleastone_ct, uniquegroupI1c$yes_strict_ct, uniquegroupI1c$yes_soft_ct, uniquegroupI1c$yes_atleastone_ct))
+
+rownames(byOrder) = c("shared_strict", "shared_soft", "shared_at-least-one", "unique_strict", "unique_soft", "unique_at-least-one")
+
+```
+
+## Venn Diagrams
+Each ellipse represents a subclade grouping
+```{r}
+# Strict
+subclade_strict = list(names(sharedNitrosocaldales$yes_strict), names(sharedNitrosopumilales$yes_strict), names(sharedNitrososphaerales$yes_strict), names(sharedNitrosotaleales$yes_strict), names(sharedgroupI1c$yes_strict))
+
+pdf('rplots/venn_subclade-strict_R8.pdf')
+venn(subclade_strict, snames = "Nitrosocaldales,Nitrosopumilales,Nitrososphaerales,Nitrosotaleales,GroupI1c", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+
+# Soft -- note that groupI1c is still set to strict since there is only one taxon in this group!
+subclade_soft = list(names(sharedNitrosocaldales$yes_soft), names(sharedNitrosopumilales$yes_soft), names(sharedNitrososphaerales$yes_soft), names(sharedNitrosotaleales$yes_soft), names(sharedgroupI1c$yes_strict))
+
+pdf('rplots/venn_subclade-soft_R8.pdf')
+venn(subclade_soft, snames = "Nitrosocaldales,Nitrosopumilales,Nitrososphaerales,Nitrosotaleales,GroupI1c", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+
+# At Least One (essentially the "pangenome" of the subclade) -- note that groupI1c is still set to strict since there is only one taxon in this group!
+subclade_atleastone = list(names(sharedNitrosocaldales$yes_atleastone), names(sharedNitrosopumilales$yes_atleastone), names(sharedNitrososphaerales$yes_atleastone), names(sharedNitrosotaleales$yes_atleastone), names(sharedgroupI1c$yes_strict))
+
+pdf('rplots/venn_subclade-atleastone_R8.pdf')
+venn(subclade_atleastone, snames = "Nitrosocaldales,Nitrosopumilales,Nitrososphaerales,Nitrosotaleales,GroupI1c", counts =TRUE, zcolor="style", size=500, borders=FALSE)
+dev.off()
+
+
+
+```
+
+ 
+ 
+ 
+ 
+## Functional Annotation and Enrichment
+### Subclade core: STRICT
+```{r}
+# Subclade strict core - number of genes
+nNitrosopumilales_core_C = gsub(".faa", "", names(sharedNitrosopumilales$yes_strict)) # 774
+nNitrosotaleales_core_C = gsub(".faa", "", names(sharedNitrosotaleales$yes_strict)) #1276
+nNitrososphaerales_core_C = gsub(".faa", "", names(sharedNitrososphaerales$yes_strict)) # 1080
+nNitrosocaldales_core_C = gsub(".faa", "", names(sharedNitrosocaldales$yes_strict)) # 1118
+nGroupI1c_core_C = gsub(".faa", "", names(sharedgroupI1c$yes_strict)) # 
+
+# Combine all
+coreC_all = Reduce(union, list(nNitrosopumilales_core_C, nNitrosotaleales_core_C, nNitrososphaerales_core_C, nNitrosocaldales_core_C, nGroupI1c_core_C)) 
+cCoreC_all = getcounts(coreC_all, categories, thaumtab)
+names(cCoreC_all) = c(categories, "NA")
+
+# Subclade strict core - number of annotations
+cNitrosopumilales_core_C = getcounts(nNitrosopumilales_core_C, categories, thaumtab) # 799
+cNitrosotaleales_core_C = getcounts(nNitrosotaleales_core_C, categories, thaumtab) # 1322
+cNitrososphaerales_core_C = getcounts(nNitrososphaerales_core_C, categories, thaumtab) # 1116
+cNitrosocaldales_core_C = getcounts(nNitrosocaldales_core_C, categories, thaumtab) # 1158
+cGroupI1c_core_C = getcounts(nGroupI1c_core_C, categories, thaumtab) # 1764
+```
+
+### SUBCLADE CORE: SOFT
+```{r}
+# Subclade soft core - number of genes
+nNitrosopumilales_core_F = gsub(".faa", "", names(sharedNitrosopumilales$yes_soft)) #1019
+nNitrosotaleales_core_F = gsub(".faa", "", names(sharedNitrosotaleales$yes_soft)) # 1514
+nNitrososphaerales_core_F = gsub(".faa", "", names(sharedNitrososphaerales$yes_soft)) # 1184
+nNitrosocaldales_core_F = gsub(".faa", "", names(sharedNitrosocaldales$yes_soft)) # 1191
+nGroupI1c_core_F = gsub(".faa", "", names(sharedgroupI1c$yes_strict)) # 1733 there is only one taxon is this group!!
+
+coreF_all = Reduce(union, list(nNitrosopumilales_core_F, nNitrosotaleales_core_F, nNitrososphaerales_core_F, nNitrosocaldales_core_F, nGroupI1c_core_F)) 
+cCoreF_all = getcounts(coreF_all, categories, thaumtab)
+names(cCoreF_all) = c(categories, "NA")
+
+# Subclade soft core - number of annotations
+cNitrosopumilales_core_F = getcounts(nNitrosopumilales_core_F, categories, thaumtab) #1054
+cNitrosotaleales_core_F = getcounts(nNitrosotaleales_core_F, categories, thaumtab) #1570
+cNitrososphaerales_core_F = getcounts(nNitrososphaerales_core_F, categories, thaumtab) #1229
+cNitrosocaldales_core_F = getcounts(nNitrosocaldales_core_F, categories, thaumtab) #1235
+cGroupI1c_core_F = getcounts(nGroupI1c_core_F, categories, thaumtab) #1764
+```
+
+# SUBCLADE - AT LEAST ONE
+```{r}
+# Subclade soft core - number of genes
+nNitrosopumilales_one = gsub(".faa", "", names(sharedNitrosopumilales$yes_atleastone)) # 7154
+nNitrosotaleales_one = gsub(".faa", "", names(sharedNitrosotaleales$yes_atleastone)) # 3054
+nNitrososphaerales_one = gsub(".faa", "", names(sharedNitrososphaerales$yes_atleastone)) # 9339
+nNitrosocaldales_one = gsub(".faa", "", names(sharedNitrosocaldales$yes_atleastone)) # 3319
+nGroupI1c_one = gsub(".faa", "", names(sharedgroupI1c$yes_strict)) # 1733 there is only one taxon is this group!!
+
+one_all = Reduce(union, list(nNitrosopumilales_one, nNitrosotaleales_one, nNitrososphaerales_one, nNitrosocaldales_one, nGroupI1c_one)) 
+cOne_all = getcounts(one_all, categories, thaumtab)
+names(cOne_all) = c(categories, "NA")
+
+# Subclade soft core - number of annotations
+cNitrosopumilales_one = getcounts(nNitrosopumilales_one, categories, thaumtab) # 7251
+cNitrosotaleales_one = getcounts(nNitrosotaleales_one, categories, thaumtab) # 3128
+cNitrososphaerales_one = getcounts(nNitrososphaerales_one, categories, thaumtab) # 9414
+cNitrosocaldales_one = getcounts(nNitrosocaldales_one, categories, thaumtab) # 3374
+cGroupI1c_one = getcounts(nGroupI1c_one, categories, thaumtab) #1764
+```
+
+
+# LINEAGE SPECIFIC CORE GENES - Strict
+```{r}
+# "anti" lists
+antiNitrosopumilales_C = Reduce(union, list(nNitrosotaleales_core_C, nNitrososphaerales_core_C, nNitrosocaldales_core_C, nGroupI1c_core_C)) 
+antiNitrosotaleales_C = Reduce(union, list(nNitrosopumilales_core_C, nNitrososphaerales_core_C, nNitrosocaldales_core_C, nGroupI1c_core_C))
+antiNitrososphaerales_C = Reduce(union, list(nNitrosopumilales_core_C, nNitrosotaleales_core_C, nNitrosocaldales_core_C, nGroupI1c_core_C))
+antiNitrosocaldales_C = Reduce(union, list(nNitrosopumilales_core_C, nNitrosotaleales_core_C, nNitrososphaerales_core_C, nGroupI1c_core_C))
+antiGroupI1c_C = Reduce(union, list(nNitrosopumilales_core_C, nNitrosotaleales_core_C, nNitrososphaerales_core_C, nNitrosocaldales_core_C))
+
+
+
+
+# In lineage-specific
+nNitrosopumilales_lin_C = nNitrosopumilales_core_C[!nNitrosopumilales_core_C %in% antiNitrosopumilales_C]
+nNitrosotaleales_lin_C = nNitrosotaleales_core_C[!nNitrosotaleales_core_C %in% antiNitrosotaleales_C] 
+nNitrososphaerales_lin_C = nNitrososphaerales_core_C[!nNitrososphaerales_core_C %in% antiNitrososphaerales_C]
+nNitrosocaldales_lin_C = nNitrosocaldales_core_C[!nNitrosocaldales_core_C %in% antiNitrosocaldales_C]
+nGroupI1c_lin_C = nGroupI1c_core_C[!nGroupI1c_core_C %in% antiGroupI1c_C]
+
+# Counts
+cNitrosopumilales_lin_C = getcounts(nNitrosopumilales_lin_C, categories, thaumtab)
+cNitrosotaleales_lin_C = getcounts(nNitrosotaleales_lin_C, categories, thaumtab)
+cNitrososphaerales_lin_C = getcounts(nNitrososphaerales_lin_C, categories, thaumtab)
+cNitrosocaldales_lin_C = getcounts(nNitrosocaldales_lin_C, categories, thaumtab)
+cGroupI1c_lin_C = getcounts(nGroupI1c_lin_C, categories, thaumtab)
+
+
+```
+
+# LINEAGE SPECIFIC CORE GENES - Soft
+```{r}
+# "anti" lists
+antiNitrosopumilales_F = Reduce(union, list(nNitrosotaleales_core_F, nNitrososphaerales_core_F, nNitrosocaldales_core_F, nGroupI1c_core_C)) 
+antiNitrosotaleales_F = Reduce(union, list(nNitrosopumilales_core_F, nNitrososphaerales_core_F, nNitrosocaldales_core_F, nGroupI1c_core_C))
+antiNitrososphaerales_F = Reduce(union, list(nNitrosopumilales_core_F, nNitrosotaleales_core_F, nNitrosocaldales_core_F, nGroupI1c_core_C))
+antiNitrosocaldales_F = Reduce(union, list(nNitrosopumilales_core_F, nNitrosotaleales_core_F, nNitrososphaerales_core_F, nGroupI1c_core_C))
+antiGroupI1c_F = Reduce(union, list(nNitrosopumilales_core_F, nNitrosotaleales_core_F, nNitrososphaerales_core_F, nNitrosocaldales_core_F))
+
+# In lineage-specific
+nNitrosopumilales_lin_F = nNitrosopumilales_core_F[!nNitrosopumilales_core_F %in% antiNitrosopumilales_F]
+nNitrosotaleales_lin_F = nNitrosotaleales_core_F[!nNitrosotaleales_core_F %in% antiNitrosotaleales_F] 
+nNitrososphaerales_lin_F = nNitrososphaerales_core_F[!nNitrososphaerales_core_F %in% antiNitrososphaerales_F]
+nNitrosocaldales_lin_F = nNitrosocaldales_core_F[!nNitrosocaldales_core_F %in% antiNitrosocaldales_F]
+nGroupI1c_lin_F = nGroupI1c_core_F[!nGroupI1c_core_F %in% antiGroupI1c_F]
+
+# Counts
+cNitrosopumilales_lin_F = getcounts(nNitrosopumilales_lin_F, categories, thaumtab)
+cNitrosotaleales_lin_F = getcounts(nNitrosotaleales_lin_F, categories, thaumtab)
+cNitrososphaerales_lin_F = getcounts(nNitrososphaerales_lin_F, categories, thaumtab)
+cNitrosocaldales_lin_F = getcounts(nNitrosocaldales_lin_F, categories, thaumtab)
+cGroupI1c_lin_F = getcounts(nGroupI1c_lin_F, categories, thaumtab)
+
+
+```
+
+
+# LINEAGE SPECIFIC CORE GENES - at least one
+```{r}
+# "anti" lists
+antiNitrosopumilales_one = Reduce(union, list(nNitrosotaleales_one, nNitrososphaerales_one, nNitrosocaldales_one, nGroupI1c_core_C)) 
+antiNitrosotaleales_one = Reduce(union, list(nNitrosopumilales_one, nNitrososphaerales_one, nNitrosocaldales_one, nGroupI1c_core_C))
+antiNitrososphaerales_one = Reduce(union, list(nNitrosopumilales_one, nNitrosotaleales_one, nNitrosocaldales_one, nGroupI1c_core_C))
+antiNitrosocaldales_one = Reduce(union, list(nNitrosopumilales_one, nNitrosotaleales_one, nNitrososphaerales_one, nGroupI1c_core_C))
+antiGroupI1c_one = Reduce(union, list(nNitrosopumilales_one, nNitrosotaleales_one, nNitrososphaerales_one, nNitrosocaldales_one))
+
+# In lineage-specific
+nNitrosopumilales_lin_one = nNitrosopumilales_one[!nNitrosopumilales_one %in% antiNitrosopumilales_one]
+nNitrosotaleales_lin_one = nNitrosotaleales_one[!nNitrosotaleales_one %in% antiNitrosotaleales_one] 
+nNitrososphaerales_lin_one = nNitrososphaerales_one[!nNitrososphaerales_one %in% antiNitrososphaerales_one]
+nNitrosocaldales_lin_one = nNitrosocaldales_one[!nNitrosocaldales_one %in% antiNitrosocaldales_one]
+nGroupI1c_lin_one = nGroupI1c_one[!nGroupI1c_one %in% antiGroupI1c_one]
+
+# Counts
+cNitrosopumilales_lin_one = getcounts(nNitrosopumilales_lin_one, categories, thaumtab)
+cNitrosotaleales_lin_one = getcounts(nNitrosotaleales_lin_one, categories, thaumtab)
+cNitrososphaerales_lin_one = getcounts(nNitrososphaerales_lin_one, categories, thaumtab)
+cNitrosocaldales_lin_one = getcounts(nNitrosocaldales_lin_one, categories, thaumtab)
+cGroupI1c_lin_one = getcounts(nGroupI1c_lin_one, categories, thaumtab)
+
+
+```
+
+# LINEAGE SPECIFIC CORE GENES - CONTINGENCY TABLES
+Nitrosopumilales
+```{r}
+## Strict
+nitrosopumilalesDF_lin_C = data.frame(
+  lin_in_cat = cNitrosopumilales_lin_C, # lineage specific 
+  lin_not_cat = sum(cNitrosopumilales_lin_C)-cNitrosopumilales_lin_C, 
+  nlin_in_cat = cCoreC_all - cNitrosopumilales_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cNitrosopumilales_lin_C)) - (cCoreC_all - cNitrosopumilales_lin_C), stringsAsFactors=FALSE)
+
+nitrosopumilalesP_lin_C = apply(nitrosopumilalesDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## Soft
+nitrosopumilalesDF_lin_F = data.frame(
+  lin_in_cat = cNitrosopumilales_lin_F, # lineage specific 
+  lin_not_cat = sum(cNitrosopumilales_lin_F)-cNitrosopumilales_lin_F, 
+  nlin_in_cat = cCoreF_all - cNitrosopumilales_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cNitrosopumilales_lin_F)) - (cCoreF_all - cNitrosopumilales_lin_F), stringsAsFactors=FALSE)
+
+nitrosopumilalesP_lin_F = apply(nitrosopumilalesDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## At Least One
+nitrosopumilalesDF_lin_one = data.frame(
+  lin_in_cat = cNitrosopumilales_lin_one, # lineage specific 
+  lin_not_cat = sum(cNitrosopumilales_lin_one)-cNitrosopumilales_lin_one, 
+  nlin_in_cat = cOne_all - cNitrosopumilales_lin_one,
+  nlin_not_cat = (sum(cOne_all) - sum(cNitrosopumilales_lin_one)) - (cOne_all - cNitrosopumilales_lin_one), stringsAsFactors=FALSE)
+
+nitrosopumilalesP_lin_one = apply(nitrosopumilalesDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+nitrosopumilalesP_all = as.data.frame(cbind(nitrosopumilalesP_lin_C, nitrosopumilalesP_lin_F, nitrosopumilalesP_lin_one), stringsAsFactors = FALSE)
+nitrosopumilalesP_all_corrected = sapply(nitrosopumilalesP_all, p.adjust, method="bonferroni")
+rownames(nitrosopumilalesP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+nitrosopumilalesP_sig = which(nitrosopumilalesP_all_corrected < .05, arr.ind=T)
+nitrosopumilalesP_sig_names = as.data.frame(cbind(rownames(nitrosopumilalesP_sig), colnames(nitrosopumilalesP_all_corrected[,nitrosopumilalesP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(nitrosopumilalesP_sig_names) = c("category", "ellipse_type")
+
+
+nitrosopumilalesP_sig_sorted = aggregate(ellipse_type ~ category, nitrosopumilalesP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+```
+
+Nitrosotaleales
+```{r}
+## Strict
+nitrosotalealesDF_lin_C = data.frame(
+  lin_in_cat = cNitrosotaleales_lin_C, # lineage specific 
+  lin_not_cat = sum(cNitrosotaleales_lin_C)-cNitrosotaleales_lin_C, 
+  nlin_in_cat = cCoreC_all - cNitrosotaleales_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cNitrosotaleales_lin_C)) - (cCoreC_all - cNitrosotaleales_lin_C), stringsAsFactors=FALSE)
+
+nitrosotalealesP_lin_C = apply(nitrosotalealesDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## Soft
+nitrosotalealesDF_lin_F = data.frame(
+  lin_in_cat = cNitrosotaleales_lin_F, # lineage specific 
+  lin_not_cat = sum(cNitrosotaleales_lin_F)-cNitrosotaleales_lin_F, 
+  nlin_in_cat = cCoreF_all - cNitrosotaleales_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cNitrosotaleales_lin_F)) - (cCoreF_all - cNitrosotaleales_lin_F), stringsAsFactors=FALSE)
+
+nitrosotalealesP_lin_F = apply(nitrosotalealesDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## At Least One
+nitrosotalealesDF_lin_one = data.frame(
+  lin_in_cat = cNitrosotaleales_lin_one, # lineage specific 
+  lin_not_cat = sum(cNitrosotaleales_lin_one)-cNitrosotaleales_lin_one, 
+  nlin_in_cat = cOne_all - cNitrosotaleales_lin_one,
+  nlin_not_cat = (sum(cOne_all) - sum(cNitrosotaleales_lin_one)) - (cOne_all - cNitrosotaleales_lin_one), stringsAsFactors=FALSE)
+
+nitrosotalealesP_lin_one = apply(nitrosotalealesDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+nitrosotalealesP_all = as.data.frame(cbind(nitrosotalealesP_lin_C, nitrosotalealesP_lin_F, nitrosotalealesP_lin_one), stringsAsFactors = FALSE)
+nitrosotalealesP_all_corrected = sapply(nitrosotalealesP_all, p.adjust, method="bonferroni")
+rownames(nitrosotalealesP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+nitrosotalealesP_sig = which(nitrosotalealesP_all_corrected < .05, arr.ind=T)
+nitrosotalealesP_sig_names = as.data.frame(cbind(rownames(nitrosotalealesP_sig), colnames(nitrosotalealesP_all_corrected[,nitrosotalealesP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(nitrosotalealesP_sig_names) = c("category", "ellipse_type")
+
+
+nitrosotalealesP_sig_sorted = aggregate(ellipse_type ~ category, nitrosotalealesP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+```
+
+Nitrososphaerales
+```{r}
+## Strict
+nitrososphaeralesDF_lin_C = data.frame(
+  lin_in_cat = cNitrososphaerales_lin_C, # lineage specific 
+  lin_not_cat = sum(cNitrososphaerales_lin_C)-cNitrososphaerales_lin_C, 
+  nlin_in_cat = cCoreC_all - cNitrososphaerales_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cNitrososphaerales_lin_C)) - (cCoreC_all - cNitrososphaerales_lin_C), stringsAsFactors=FALSE)
+
+nitrososphaeralesP_lin_C = apply(nitrososphaeralesDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## Soft
+nitrososphaeralesDF_lin_F = data.frame(
+  lin_in_cat = cNitrososphaerales_lin_F, # lineage specific 
+  lin_not_cat = sum(cNitrososphaerales_lin_F)-cNitrososphaerales_lin_F, 
+  nlin_in_cat = cCoreF_all - cNitrososphaerales_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cNitrososphaerales_lin_F)) - (cCoreF_all - cNitrososphaerales_lin_F), stringsAsFactors=FALSE)
+
+nitrososphaeralesP_lin_F = apply(nitrososphaeralesDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## At Least One
+nitrososphaeralesDF_lin_one = data.frame(
+  lin_in_cat = cNitrososphaerales_lin_one, # lineage specific 
+  lin_not_cat = sum(cNitrososphaerales_lin_one)-cNitrososphaerales_lin_one, 
+  nlin_in_cat = cOne_all - cNitrososphaerales_lin_one,
+  nlin_not_cat = (sum(cOne_all) - sum(cNitrososphaerales_lin_one)) - (cOne_all - cNitrososphaerales_lin_one), stringsAsFactors=FALSE)
+
+nitrososphaeralesP_lin_one = apply(nitrososphaeralesDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+nitrososphaeralesP_all = as.data.frame(cbind(nitrososphaeralesP_lin_C, nitrososphaeralesP_lin_F, nitrososphaeralesP_lin_one), stringsAsFactors = FALSE)
+nitrososphaeralesP_all_corrected = sapply(nitrososphaeralesP_all, p.adjust, method="bonferroni")
+rownames(nitrososphaeralesP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+nitrososphaeralesP_sig = which(nitrososphaeralesP_all_corrected < .05, arr.ind=T)
+nitrososphaeralesP_sig_names = as.data.frame(cbind(rownames(nitrososphaeralesP_sig), colnames(nitrososphaeralesP_all_corrected[,nitrososphaeralesP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(nitrososphaeralesP_sig_names) = c("category", "ellipse_type")
+
+
+nitrososphaeralesP_sig_sorted = aggregate(ellipse_type ~ category, nitrososphaeralesP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+```
+
+Nitrosocaldales
+```{r}
+## Strict
+nitrosocaldalesDF_lin_C = data.frame(
+  lin_in_cat = cNitrosocaldales_lin_C, # lineage specific 
+  lin_not_cat = sum(cNitrosocaldales_lin_C)-cNitrosocaldales_lin_C, 
+  nlin_in_cat = cCoreC_all - cNitrosocaldales_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cNitrosocaldales_lin_C)) - (cCoreC_all - cNitrosocaldales_lin_C), stringsAsFactors=FALSE)
+
+nitrosocaldalesP_lin_C = apply(nitrosocaldalesDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## Soft
+nitrosocaldalesDF_lin_F = data.frame(
+  lin_in_cat = cNitrosocaldales_lin_F, # lineage specific 
+  lin_not_cat = sum(cNitrosocaldales_lin_F)-cNitrosocaldales_lin_F, 
+  nlin_in_cat = cCoreF_all - cNitrosocaldales_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cNitrosocaldales_lin_F)) - (cCoreF_all - cNitrosocaldales_lin_F), stringsAsFactors=FALSE)
+
+nitrosocaldalesP_lin_F = apply(nitrosocaldalesDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## At Least One
+nitrosocaldalesDF_lin_one = data.frame(
+  lin_in_cat = cNitrosocaldales_lin_one, # lineage specific 
+  lin_not_cat = sum(cNitrosocaldales_lin_one)-cNitrosocaldales_lin_one, 
+  nlin_in_cat = cOne_all - cNitrosocaldales_lin_one,
+  nlin_not_cat = (sum(cOne_all) - sum(cNitrosocaldales_lin_one)) - (cOne_all - cNitrosocaldales_lin_one), stringsAsFactors=FALSE)
+
+nitrosocaldalesP_lin_one = apply(nitrosocaldalesDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+nitrosocaldalesP_all = as.data.frame(cbind(nitrosocaldalesP_lin_C, nitrosocaldalesP_lin_F, nitrosocaldalesP_lin_one), stringsAsFactors = FALSE)
+nitrosocaldalesP_all_corrected = sapply(nitrosocaldalesP_all, p.adjust, method="bonferroni")
+rownames(nitrosocaldalesP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+nitrosocaldalesP_sig = which(nitrosocaldalesP_all_corrected < .05, arr.ind=T)
+nitrosocaldalesP_sig_names = as.data.frame(cbind(rownames(nitrosocaldalesP_sig), colnames(nitrosocaldalesP_all_corrected[,nitrosocaldalesP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(nitrosocaldalesP_sig_names) = c("category", "ellipse_type")
+
+
+nitrosocaldalesP_sig_sorted = aggregate(ellipse_type ~ category, nitrosocaldalesP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+```
+
+GroupI1c
+```{r}
+## Strict
+groupI1cDF_lin_C = data.frame(
+  lin_in_cat = cGroupI1c_lin_C, # lineage specific 
+  lin_not_cat = sum(cGroupI1c_lin_C)-cGroupI1c_lin_C, 
+  nlin_in_cat = cCoreC_all - cGroupI1c_lin_C,
+  nlin_not_cat = (sum(cCoreC_all) - sum(cGroupI1c_lin_C)) - (cCoreC_all - cGroupI1c_lin_C), stringsAsFactors=FALSE)
+
+groupI1cP_lin_C = apply(groupI1cDF_lin_C,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## Soft
+groupI1cDF_lin_F = data.frame(
+  lin_in_cat = cGroupI1c_lin_F, # lineage specific 
+  lin_not_cat = sum(cGroupI1c_lin_F)-cGroupI1c_lin_F, 
+  nlin_in_cat = cCoreF_all - cGroupI1c_lin_F,
+  nlin_not_cat = (sum(cCoreF_all) - sum(cGroupI1c_lin_F)) - (cCoreF_all - cGroupI1c_lin_F), stringsAsFactors=FALSE)
+
+groupI1cP_lin_F = apply(groupI1cDF_lin_F,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+## At Least One
+groupI1cDF_lin_one = data.frame(
+  lin_in_cat = cGroupI1c_lin_one, # lineage specific 
+  lin_not_cat = sum(cGroupI1c_lin_one)-cGroupI1c_lin_one, 
+  nlin_in_cat = cOne_all - cGroupI1c_lin_one,
+  nlin_not_cat = (sum(cOne_all) - sum(cGroupI1c_lin_one)) - (cOne_all - cGroupI1c_lin_one), stringsAsFactors=FALSE)
+
+groupI1cP_lin_one = apply(groupI1cDF_lin_one,1, function(x) fisher.test(matrix(x,nr=2), alternative="greater")$p.value)
+
+groupI1cP_all = as.data.frame(cbind(groupI1cP_lin_C, groupI1cP_lin_F, groupI1cP_lin_one), stringsAsFactors = FALSE)
+groupI1cP_all_corrected = sapply(groupI1cP_all, p.adjust, method="bonferroni")
+rownames(groupI1cP_all_corrected) = c(categories, "NA")
+
+# Pick out significant categories
+groupI1cP_sig = which(groupI1cP_all_corrected < .05, arr.ind=T)
+groupI1cP_sig_names = as.data.frame(cbind(rownames(groupI1cP_sig), colnames(groupI1cP_all_corrected[,groupI1cP_sig[,2]])), stringsAsFactors = FALSE)
+colnames(groupI1cP_sig_names) = c("category", "ellipse_type")
+
+
+groupI1cP_sig_sorted = aggregate(ellipse_type ~ category, groupI1cP_sig_names, function(gf) 
+      paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
+
+
+```

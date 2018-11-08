@@ -47,3 +47,41 @@ writeLines(pangenomelistR7, "annotation/R7_pangenome_fnames.txt")
 writeLines(pangenomelistR8, "annotation/R8_pangenome_fnames.txt")
 
 ```
+
+Load infile from BLASToise
+```{r}
+R8pananno_pre = read.csv("annotation/R8thaumpan_anno.all", sep="\t", header=FALSE, stringsAsFactors=FALSE, na.strings=c("","NA")) 
+
+annotable = function(df) {
+  df[,1] = gsub(".tab", "", df[,1]) # remove '.tab' in OF name
+  ocounts = data.frame(table(df$V1)) # occurence counts for all OFs
+  odups = ocounts[ocounts$Freq >1,] # OFs with multiple annos
+  odups_name = as.character(odups$Var1) # OF dups name
+  dupsdf = data.frame()
+  for (i in 1:length(odups_name)) {
+    subsub = df[which(df$V1 == odups_name[i]),]
+    subsub[1,2] = paste(subsub$V2, collapse=",")
+    subsub[1,3] = paste(subsub$V3, collapse=",")
+    subsub[1,4] = paste(subsub$V4, collapse=",")
+    dupsdf = rbind(dupsdf, subsub[1,])
+  }
+  dups = c()
+  for (i in 1:length(odups_name)) {
+    dups = c(dups,which(df$V1 == odups_name[i]))
+  }
+  nodup = df[-dups,]
+  pan_anno_merge = rbind(nodup, dupsdf)
+  pan_anno_merge = pan_anno_merge[order(pan_anno_merge$V1),]
+  return(pan_anno_merge)
+}
+
+pancounts = data.frame(matrix(ncol=0,nrow=0), stringsAsFactors=FALSE)
+for(i in 1:length(categories)) {
+  result = c(as.character(categories[i]), sum(str_detect(thaumtab$V3, categories[i]), na.rm=TRUE))
+  pancounts = rbind(pancounts, result, stringsAsFactors=FALSE)
+}
+
+R8pananno_post = annotable(R8pananno_pre)
+write.table(R8pananno_post, "annotation/R8ThaumAnno.tab", sep="\t", col.names=F, row.names=F, quote=F)
+
+```
