@@ -415,3 +415,50 @@ colnames(thAOAP_sig_names) = c("category", "ellipse_type")
 thAOAP_sig_sorted = aggregate(ellipse_type ~ category, thAOAP_sig_names, function(gf) 
       paste(unique(unlist(strsplit(gf, ", "))), collapse = ',')) 
 ```
+
+MesoALL unique overlap
+```{r}
+MesoALL = c(MesoMAO, ThFn1)
+taxlistMesoALL = taxrownums(pangenome_clean, taxa_yes=MesoALL)
+MesoALL_overlap = getunique(pangenome_clean, taxlistMesoALL$r_yes, taxlistMesoALL$r_no) 
+
+
+```
+
+ThermoALL unique overlap
+```{r}
+ThermoALL = c(ThAOA, Csub)
+taxlistThermoALL = taxrownums(pangenome_clean, taxa_yes=ThermoALL)
+ThermoALL_overlap = getunique(pangenome_clean, taxlistThermoALL$r_yes, taxlistThermoALL$r_no)
+
+
+
+```
+
+Annotations for unique
+```{r}
+# ThermoALL
+ThermoALL_soft = getmissing(pangenome_clean, taxlistThermoALL$r_yes, ThermoALL_overlap$yes_soft)
+ThermoALL_strict_anno = thaumtab[gsub(".faa", "", names(ThermoALL_overlap$yes_strict)),] 
+ThermoALL_soft_anno = thaumtab[gsub(".faa", "", ThermoALL_soft$genefam),]
+ThermoALL_soft_anno = cbind(ThermoALL_soft_anno, ThermoALL_soft$taxamissing)
+
+# ThAOA
+ThAOA_soft = getmissing(pangenome_clean, taxlistThAOA$r_yes, uniqueThAOA$yes_soft)
+ThAOA_strict_anno = thaumtab[gsub(".faa", "", names(uniqueThAOA$yes_strict)),]
+ThAOA_soft_anno = thaumtab[gsub(".faa", "", ThAOA_soft$genefam),]
+ThAOA_soft_anno = cbind(ThAOA_soft_anno, ThAOA_soft$taxamissing)
+
+# MesoALL
+MesoALL_soft = getmissing(pangenome_clean, taxlistMesoALL$r_yes, MesoALL_overlap$yes_soft)
+MesoALL_strict_anno = thaumtab[gsub(".faa", "", names(MesoALL_overlap$yes_strict)),] 
+MesoALL_soft_anno = thaumtab[gsub(".faa", "", MesoALL_soft$genefam),]
+MesoALL_soft_anno = cbind(MesoALL_soft_anno, MesoALL_soft$taxamissing)
+
+# MesoMAO
+MesoMAO_soft = getmissing(pangenome_clean, taxlistMesoMAO$r_yes, uniqueMesoMAO$yes_soft)
+MesoMAO_strict_anno = thaumtab[gsub(".faa", "", names(uniqueMesoMAO$yes_strict)),]
+MesoMAO_soft_anno = thaumtab[gsub(".faa", "", MesoMAO_soft$genefam),]
+MesoMAO_soft_anno = cbind(MesoMAO_soft_anno, MesoMAO_soft$taxamissing)
+
+```
