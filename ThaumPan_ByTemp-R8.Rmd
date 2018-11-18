@@ -462,3 +462,11 @@ MesoMAO_soft_anno = thaumtab[gsub(".faa", "", MesoMAO_soft$genefam),]
 MesoMAO_soft_anno = cbind(MesoMAO_soft_anno, MesoMAO_soft$taxamissing)
 
 ```
+
+Modthermos
+```{r}
+ModThermo = taxkey[which(taxkey$Type_Temp == "modthermo" & taxkey$Type_AO == "AO"), 1]
+taxlistModThermo = taxrownums(df=pangenome_clean, taxa_yes=ModThermo)
+uniqueModThermo = getunique(pangenome_clean, taxlistModThermo$r_yes, taxlistModThermo$r_no)
+uniqueModThermo_soft = getmissing(pangenome_clean, taxlistModThermo$r_yes, uniqueModThermo$yes_soft)
+```
