@@ -3,63 +3,102 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-Load pangenome
-
+Load pangenome R7
 ```{r}
 
 # headers are incorrectly imported by read.csv, so set header=FALSE
-# setwd("/Users/RoxanneB/Desktop/thaum-explorer")
-pangenome = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
-pangenome = panpretty(pangenome)
+
+pangenome_R7 = read.csv("panmatrices/Run7_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome_R7 = panpretty(pangenome_R7)
 
 # check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
-pangenome_clean = NAcheck(pangenome)
+pangenome_clean_R7 = NAcheck(pangenome_R7)
 
 # read in taxa key
-taxkey = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
+taxkey_R7 = read.table("taxalists/taxlistR5R6R7.tab", header=TRUE, stringsAsFactors=FALSE)
 
 # shared
-thaum = taxkey[which(taxkey$Type_Phylum == "thaum" & taxkey$Taxa_Short != "CsymA"),1]
-taxlistThaum = taxrownums(df=pangenome_clean, taxa_yes=thaum)
-sharedpan = sharedgroups(pangenome_clean, taxlistThaum$r_yes)
+thaum_R7_CsymA = taxkey_R7[which(taxkey_R7$Type_Phylum == "thaum"),1]
+thaum_R7_noCsymA = taxkey_R7[which(taxkey_R7$Type_Phylum == "thaum" & taxkey_R7$Taxa_Short != "CsymA"),1]
+taxlistThaum_R7_CsymA = taxrownums(df=pangenome_clean_R7, taxa_yes=thaum_R7_CsymA)
+taxlistThaum_R7_noCsymA = taxrownums(df=pangenome_clean_R7, taxa_yes=thaum_R7_noCsymA)
+sharedpan_R7_CsymA = sharedgroups(pangenome_clean_R7, taxlistThaum_R7_CsymA$r_yes)
+sharedpan_R7_noCsymA = sharedgroups(pangenome_clean_R7, taxlistThaum_R7_noCsymA$r_yes)
+```
+
+Load Pangenome R8
+```{r}
+
+# headers are incorrectly imported by read.csv, so set header=FALSE
+
+pangenome_R8 = read.csv("panmatrices/Run8_pangenome_matrix_t0.tab", sep="\t", header=FALSE, stringsAsFactors=FALSE) 
+pangenome_R8 = panpretty(pangenome_R8)
+
+# check and delete colummns with NAs due to incorrect importing. pangenome_clean has NA cols removed.
+pangenome_clean_R8 = NAcheck(pangenome_R8)
+
+# read in taxa key
+taxkey_R8 = read.table("taxalists/taxlistR8.tab", header=TRUE, stringsAsFactors=FALSE)
+
+# shared
+thaum_R8 = taxkey_R8[which(taxkey_R8$Type_Phylum == "thaum" & taxkey_R8$Taxa_Short != "CsymA"),1]
+taxlistThaum_R8 = taxrownums(df=pangenome_clean_R8, taxa_yes=thaum_R8)
+sharedpan_R8 = sharedgroups(pangenome_clean_R8, taxlistThaum_R8$r_yes)
+```
+
+Annotations
+```{r}
+# read in COG annotation table
+thaumtab = read.table("annotation/R8ThaumAnno.tab", sep="\t", quote = "", stringsAsFactors=FALSE)
+rownames(thaumtab) = thaumtab[,1]
+
+categories = c("D", "M", "N", "O", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "J", "K", "L", "C", "E", "F", "G", "H", "I", "P", "Q", "R", "S", "NA")
+
+
 ```
 
 CsymA+
 ```{r}
 
-thaumCsymA = taxkey[which(taxkey$Type_Phylum == "thaum"),1]
-taxlistThaumCsymA = taxrownums(df=pangenome_clean, taxa_yes=thaumCsymA)
-sharedThaumCsymA = sharedgroups(pangenome_clean, taxlistThaumCsymA$r_yes)
-
-thaumCsymA_sub = pangenome_clean[,sharedThaumCsymA$yes_strict]
+thaumCsymA_sub = pangenome_clean_R7[,sharedpan_R7_CsymA$yes_strict]
 thaumCsymA_sub_removeCsub = thaumCsymA_sub[!rownames(thaumCsymA_sub) %in% "Csub",]
 
 # find single copy
 singlecopyWithCsymA = thaumCsymA_sub_removeCsub[,apply(thaumCsymA_sub_removeCsub, 2, function(x) all(x == 1))]
 singlecopyWithCsymA_names = colnames(singlecopyWithCsymA)
 
-writeLines(singlecopyWithCsymA_names, "ThaumSingleCopy_CsymA.txt")
+# writeLines(singlecopyWithCsymA_names, "ThaumSingleCopy_CsymA.txt")
 
 ```
 
 
 CsymA-
 ```{r}
-thaumnoCsymA = taxkey[which(taxkey$Type_Phylum == "thaum" & taxkey$Taxa_Short != "CsymA"),1]
-taxlistThaumnoCsymA = taxrownums(df=pangenome_clean, taxa_yes=thaum)
-sharedThaumnoCsymA = sharedgroups(pangenome_clean, taxlistThaumnoCsymA$r_yes)
-
-thaumnoCsymA_sub = pangenome_clean[,sharedThaumnoCsymA$yes_strict]
+thaumnoCsymA_sub = pangenome_clean_R7[,sharedpan_R7_noCsymA$yes_strict]
 thaumnoCsymA_sub_removeCsub = thaumnoCsymA_sub[!rownames(thaumnoCsymA_sub) %in% "Csub",]
 
 # find single copy
-singlecopyNoCsymA = thaumnoCsymA_sub_removeCsub[,apply(thaumnoCsymA_sub_removeCsub, 2, function(x) all(x == 1))]
-singlecopyNoCsymA_names = colnames(singlecopyNoCsymA)
+singlecopynoCsymA = thaumnoCsymA_sub_removeCsub[,apply(thaumnoCsymA_sub_removeCsub, 2, function(x) all(x == 1))]
+singlecopynoCsymA_names = colnames(singlecopynoCsymA)
 
-writeLines(singlecopyNoCsymA_names, "ThaumSingleCopy_noCsymA.txt")
+# writeLines(singlecopynoCsymA_names, "ThaumSingleCopy_noCsymA.txt")
 ```
 
+R8
+```{r}
+thaumR8_sub = pangenome_clean_R8[,sharedpan_R8$yes_strict]
+singlecopyR8 = thaumR8_sub[,apply(thaumR8_sub, 2, function(x) all(x == 1))]
+singlecopyR8_names = colnames(singlecopyR8)
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+singlecopyR8_rownames = gsub(".faa", "", singlecopyR8_names)
+singlecopyR8_anno = thaumtab[singlecopyR8_rownames,]
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
+```
+
+```{r}
+for(i in 1:length(categories)) {
+  if(length(which(singlecopyR8_anno$V3 == categories[i])) > 0) {writeLines(paste(rownames(singlecopyR8_anno[which(singlecopyR8_anno$V3 == categories[i]),]), ".faa", sep=""), paste("SingleCopy/relax", categories[i], sep=""))}
+  
+}
+
+```

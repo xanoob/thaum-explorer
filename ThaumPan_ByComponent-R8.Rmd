@@ -9,6 +9,7 @@ library(crabrawlR)
 library(stringr)
 library(ggplot2)
 library(reshape2)
+library(micropan) # calculate pangenome size estimates
 
 
 ```
@@ -250,4 +251,12 @@ ggsave('coreaccessorystack.pdf', plot = last_plot(), device = NULL, path = NULL,
 
 ```
 
-
+Pangenome size estimates
+```{r}
+panThaumOnly = pangenome_clean[taxlistThaum$r_yes,]
+panThaumChao = chao(panThaumOnly)
+panThaumHeaps = heaps(panThaumOnly, n.perm = 500)
+panThaumRF = rarefaction(panThaumOnly, n.perm = 500)
+panThaumRFplot = plot(panThaumRF)
+panThaumRFsum = summary(panThaumRF)
+```
